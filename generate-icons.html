@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>나무위키 아카링커 아이콘 생성기</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2e7d32;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .preview {
+            display: flex;
+            gap: 30px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+        .icon-box {
+            text-align: center;
+        }
+        .icon-box canvas {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .icon-box p {
+            font-size: 14px;
+            color: #666;
+            margin: 5px 0;
+        }
+        button {
+            background: #2e7d32;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            margin: 5px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #1b5e20;
+        }
+        .button-group {
+            margin-top: 20px;
+        }
+        .success {
+            background: #4caf50;
+            color: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+            display: none;
+        }
+        .instructions {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+            line-height: 1.6;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            color: #2e7d32;
+        }
+        .instructions ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌿 나무위키 아카링커 아이콘 생성기</h1>
+        <p class="subtitle">나무위키 스타일 + 링크 클립 아이콘</p>
+
+        <div class="preview">
+            <div class="icon-box">
+                <canvas id="icon16" width="16" height="16"></canvas>
+                <p>16 x 16 픽셀</p>
+                <button onclick="downloadIcon('icon16', 'icon16.png')">다운로드</button>
+            </div>
+            <div class="icon-box">
+                <canvas id="icon48" width="48" height="48"></canvas>
+                <p>48 x 48 픽셀</p>
+                <button onclick="downloadIcon('icon48', 'icon48.png')">다운로드</button>
+            </div>
+            <div class="icon-box">
+                <canvas id="icon128" width="128" height="128"></canvas>
+                <p>128 x 128 픽셀</p>
+                <button onclick="downloadIcon('icon128', 'icon128.png')">다운로드</button>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button onclick="downloadAllIcons()" style="background: #1976d2;">📦 모두 다운로드</button>
+            <button onclick="regenerateIcons()">🔄 다시 생성</button>
+        </div>
+
+        <div id="success" class="success">
+            ✅ 아이콘이 다운로드되었습니다!
+        </div>
+
+        <div class="instructions">
+            <h3>📋 사용 방법</h3>
+            <ol>
+                <li><strong>"모두 다운로드"</strong> 버튼을 클릭하여 3개의 아이콘을 다운로드하세요.</li>
+                <li>다운로드된 파일을 <code>namu_arca/icons/</code> 폴더로 이동하세요.</li>
+                <li>Chrome Extension을 새로고침하세요 (<code>chrome://extensions/</code>에서 🔄 버튼).</li>
+                <li>완료! 익스텐션에 아이콘이 적용됩니다.</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // 아이콘 생성 함수
+        function generateIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+
+            // 배경 초기화
+            ctx.clearRect(0, 0, size, size);
+
+            // 나무위키 스타일 초록색 원형 배경
+            const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+            gradient.addColorStop(0, '#4caf50');
+            gradient.addColorStop(1, '#2e7d32');
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 나뭇잎 모양 (간단한 버전)
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = size * 0.03;
+
+            // 중앙 줄기
+            const stemWidth = size * 0.06;
+            const stemHeight = size * 0.5;
+            ctx.fillRect(size/2 - stemWidth/2, size * 0.3, stemWidth, stemHeight);
+
+            // 왼쪽 잎
+            ctx.beginPath();
+            ctx.moveTo(size * 0.5, size * 0.4);
+            ctx.quadraticCurveTo(size * 0.25, size * 0.35, size * 0.3, size * 0.5);
+            ctx.quadraticCurveTo(size * 0.3, size * 0.45, size * 0.5, size * 0.5);
+            ctx.fill();
+
+            // 오른쪽 잎
+            ctx.beginPath();
+            ctx.moveTo(size * 0.5, size * 0.4);
+            ctx.quadraticCurveTo(size * 0.75, size * 0.35, size * 0.7, size * 0.5);
+            ctx.quadraticCurveTo(size * 0.7, size * 0.45, size * 0.5, size * 0.5);
+            ctx.fill();
+
+            // 우측 하단 링크 클립 아이콘
+            const clipSize = size * 0.3;
+            const clipX = size * 0.7;
+            const clipY = size * 0.7;
+
+            // 클립 배경 (흰색 원)
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(clipX, clipY, clipSize * 0.6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 클립 아이콘 (링크 체인 모양)
+            ctx.strokeStyle = '#2e7d32';
+            ctx.lineWidth = size * 0.04;
+            ctx.lineCap = 'round';
+
+            // 왼쪽 체인 링크
+            ctx.beginPath();
+            ctx.arc(clipX - clipSize * 0.15, clipY, clipSize * 0.25, Math.PI * 0.5, Math.PI * 1.5);
+            ctx.stroke();
+
+            // 오른쪽 체인 링크
+            ctx.beginPath();
+            ctx.arc(clipX + clipSize * 0.15, clipY, clipSize * 0.25, -Math.PI * 0.5, Math.PI * 0.5);
+            ctx.stroke();
+
+            // 중간 연결선
+            ctx.beginPath();
+            ctx.moveTo(clipX - clipSize * 0.1, clipY - clipSize * 0.15);
+            ctx.lineTo(clipX + clipSize * 0.1, clipY + clipSize * 0.15);
+            ctx.stroke();
+        }
+
+        // 아이콘 다운로드 함수
+        function downloadIcon(canvasId, filename) {
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+
+            showSuccess();
+        }
+
+        // 모든 아이콘 다운로드
+        function downloadAllIcons() {
+            setTimeout(() => downloadIcon('icon16', 'icon16.png'), 100);
+            setTimeout(() => downloadIcon('icon48', 'icon48.png'), 300);
+            setTimeout(() => downloadIcon('icon128', 'icon128.png'), 500);
+        }
+
+        // 아이콘 재생성
+        function regenerateIcons() {
+            generateIcon('icon16', 16);
+            generateIcon('icon48', 48);
+            generateIcon('icon128', 128);
+        }
+
+        // 성공 메시지 표시
+        function showSuccess() {
+            const success = document.getElementById('success');
+            success.style.display = 'block';
+            setTimeout(() => {
+                success.style.display = 'none';
+            }, 3000);
+        }
+
+        // 페이지 로드 시 아이콘 생성
+        window.onload = function() {
+            generateIcon('icon16', 16);
+            generateIcon('icon48', 48);
+            generateIcon('icon128', 128);
+        };
+    </script>
+</body>
+</html>
