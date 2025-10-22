@@ -226,8 +226,4 @@ function getArcaSearchUrl(keyword) {
 
 ---
 
-**프로젝트 타입**: 하루 완성 사이드 프로젝트
-**개발 시간**: 6-8시간
-**난이도**: ⭐⭐
-
 #chrome-extension #side-project #namuwiki #arca-live #Jell

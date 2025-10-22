@@ -57,3 +57,7 @@ logs/
 internal-docs/
 
 build-zip.sh
+
+# Development/Generator HTML files
+generate-icons.html
+generate-promo-image.html
