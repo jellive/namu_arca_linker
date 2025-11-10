@@ -13,6 +13,9 @@
 - ✅ 각 검색어 옆에 아카라이브 링크 추가 (왜?)
 - ✅ **아카라이브 나무위키 실검 채널** (`/b/namuhotnow`)에서 해당 키워드 검색
 - ✅ 실검 갱신 시 자동으로 링크 업데이트
+- ✅ **실시간 검색어 변경 추적** (v1.1.0 NEW!)
+  - 검색어 추가/변경/삭제 자동 감지
+  - Fade 애니메이션으로 부드러운 링크 업데이트
 - ✅ 다크모드/라이트모드 지원
 - ✅ 반응형 디자인
 
@@ -112,15 +115,33 @@ function getArcaSearchUrl(keyword) {
 }
 ```
 
-### 3. 동적 감지
+### 3. 동적 감지 및 변경 추적
 
 MutationObserver를 사용하여 실검 업데이트를 자동으로 감지합니다:
 
 ```javascript
 const observer = new MutationObserver(mutations => {
-  // 실검이 업데이트되면 링크 재생성
-  addArcaLinks()
+  childList: true,      // DOM 추가/제거 감지
+  attributes: true,     // 속성 변경 감지
+  attributeFilter: ['href'] // href 속성만 감시
 })
+```
+
+### 4. 검색어 변경 감지 (v1.1.0 NEW!)
+
+검색어가 변경되면 자동으로 감지하고 Diff 계산을 수행합니다:
+
+```javascript
+// 변경 타입: added, modified, removed
+const changes = detectKeywordChanges()
+
+// 각 변경에 대해 링크 업데이트
+for (const change of changes) {
+  if (change.type === 'modified') {
+    // Fade-out (200ms) → 제거 → 생성 → Fade-in (200ms)
+    await updateExistingLink(element, oldKeyword, newKeyword)
+  }
+}
 ```
 
 ## 🧪 디버깅 및 테스트

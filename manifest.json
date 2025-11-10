@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "나무위키 실검 아카라이브 링커",
-  "version": "1.0.0",
-  "description": "나무위키 실시간 검색어 옆에 아카라이브 링크를 추가합니다",
+  "version": "1.1.0",
+  "description": "나무위키 실시간 검색어 옆에 아카라이브 링크를 추가하고, 검색어 변경을 자동 추적합니다",
   "permissions": [
     "storage"
   ],

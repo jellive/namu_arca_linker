@@ -61,3 +61,27 @@ build-zip.sh
 # Development/Generator HTML files
 generate-icons.html
 generate-promo-image.html
+
+prd/
+
+logs
+dev-debug.log
+# Dependency directories
+# Environment variables
+.env
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific
+
+# Task files
+# tasks.json
+# tasks/
+
+# Taskmaster
+.taskmaster/ 
