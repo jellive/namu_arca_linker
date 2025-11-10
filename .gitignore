@@ -84,4 +84,7 @@ dev-debug.log
 # tasks/
 
 # Taskmaster
-.taskmaster/ 
+.taskmaster/
+
+# Cursor IDE
+.cursor/ 
