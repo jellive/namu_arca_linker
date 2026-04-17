@@ -12,7 +12,10 @@
     "lint:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"src/**/*.{ts,html,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,html,css}\"",
-    "release": "npm run test:run && npm run lint && npm run build && node scripts/build-release.mjs"
+    "release": "npm run test:run && npm run lint && npm run build && node scripts/build-release.mjs",
+    "deploy:upload": "dotenv -e .env -- chrome-webstore-upload upload --source release/namu_arca_linker-v$npm_package_version.zip",
+    "deploy:publish": "dotenv -e .env -- chrome-webstore-upload publish",
+    "deploy": "npm run release && npm run deploy:upload && npm run deploy:publish"
   },
   "repository": {
     "type": "git",
@@ -29,6 +32,8 @@
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
+    "chrome-webstore-upload-cli": "^3.5.0",
+    "dotenv-cli": "^11.0.0",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.2",
     "jsdom": "^28.1.0",
