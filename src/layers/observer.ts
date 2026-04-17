@@ -1,119 +1,152 @@
-import { DEBOUNCE_DELAY_MS, DOM_READY_DELAY_MS, LOG_PREFIX } from '../constants/config'
-import { CONTAINER_SELECTORS } from '../constants/selectors'
-import { detectKeywordChanges } from './detection'
-import { addArcaLinks, updateArcaLink } from './manipulation'
+import {
+  DEBOUNCE_DELAY_MS,
+  DOM_READY_DELAY_MS,
+  LOG_PREFIX,
+} from "../constants/config";
+import { CONTAINER_SELECTORS } from "../constants/selectors";
+import { detectKeywordChanges } from "./detection";
+import { addArcaLinks, updateArcaLink } from "./manipulation";
 
 /**
  * Handle href attribute changes on realtime search links.
  * Debounced to 100ms to batch rapid DOM updates.
  */
-let attributeDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let attributeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 function handleAttributeChanges(mutations: MutationRecord[]): void {
-  console.log(`${LOG_PREFIX} 속성 변경 감지:`, mutations.length)
+  console.log(`${LOG_PREFIX} 속성 변경 감지:`, mutations.length);
 
   const hrefChangedNodes = mutations
-    .filter(m => m.type === 'attributes' && m.attributeName === 'href')
-    .map(m => m.target as HTMLElement)
-    .filter(node => {
-      const anchor = node as HTMLAnchorElement
-      return anchor.href && anchor.href.includes('/Go?q=')
-    })
+    .filter((m) => m.type === "attributes" && m.attributeName === "href")
+    .map((m) => m.target as HTMLElement)
+    .filter((node) => {
+      const anchor = node as HTMLAnchorElement;
+      return anchor.href && anchor.href.includes("/Go?q=");
+    });
 
   if (hrefChangedNodes.length > 0) {
-    console.log(`${LOG_PREFIX} 실검 링크 변경 감지:`, hrefChangedNodes.length)
+    console.log(`${LOG_PREFIX} 실검 링크 변경 감지:`, hrefChangedNodes.length);
 
     if (attributeDebounceTimer !== null) {
-      clearTimeout(attributeDebounceTimer)
+      clearTimeout(attributeDebounceTimer);
     }
     attributeDebounceTimer = setTimeout(() => {
-      onRealtimeSearchChanged(hrefChangedNodes)
-    }, DEBOUNCE_DELAY_MS)
+      onRealtimeSearchChanged(hrefChangedNodes);
+    }, DEBOUNCE_DELAY_MS);
   }
 }
 
-async function onRealtimeSearchChanged(_changedNodes: HTMLElement[]): Promise<void> {
-  console.log(`${LOG_PREFIX} 실검 갱신 처리 시작`)
+async function onRealtimeSearchChanged(
+  _changedNodes: HTMLElement[],
+): Promise<void> {
+  console.log(`${LOG_PREFIX} 실검 갱신 처리 시작`);
 
-  const changes = detectKeywordChanges()
+  const changes = detectKeywordChanges();
 
   if (changes.length > 0) {
     for (const change of changes) {
-      await updateArcaLink(change)
+      await updateArcaLink(change);
     }
-    console.log(`${LOG_PREFIX} 실검 갱신 처리 완료`)
+    console.log(`${LOG_PREFIX} 실검 갱신 처리 완료`);
   } else {
-    console.log(`${LOG_PREFIX} 변경 내역 없음`)
+    console.log(`${LOG_PREFIX} 변경 내역 없음`);
   }
 }
 
-/**
- * Set up MutationObserver on the realtime keyword container.
- */
-export function observeRealtimeUpdates(): void {
-  let realtimeContainer: Element | null = null
-
-  for (const selector of CONTAINER_SELECTORS) {
-    const container = document.querySelector(selector)
-    if (container) {
-      realtimeContainer = container
-      console.log(`${LOG_PREFIX} 컨테이너 발견: ${selector}`)
-      break
-    }
-  }
-
-  if (!realtimeContainer) {
-    console.log(`${LOG_PREFIX} 특정 컨테이너를 찾지 못해 document.body를 감시합니다.`)
-    realtimeContainer = document.body
-  }
-
-  const observer = new MutationObserver(mutations => {
-    const hasChildListMutation = mutations.some(m => m.type === 'childList')
-    const hasAttributeMutation = mutations.some(m => m.type === 'attributes')
+function setupObserver(realtimeContainer: Element): void {
+  const observer = new MutationObserver((mutations) => {
+    const hasChildListMutation = mutations.some((m) => m.type === "childList");
+    const hasAttributeMutation = mutations.some((m) => m.type === "attributes");
 
     if (hasChildListMutation) {
-      let shouldUpdate = false
+      let shouldUpdate = false;
 
-      mutations.forEach(mutation => {
+      mutations.forEach((mutation) => {
         if (mutation.addedNodes.length) {
-          mutation.addedNodes.forEach(node => {
+          mutation.addedNodes.forEach((node) => {
             if (node.nodeType === Node.ELEMENT_NODE) {
-              const element = node as HTMLElement
+              const element = node as HTMLElement;
 
-              if (element.classList && element.classList.contains('arca-link')) {
-                return
+              if (
+                element.classList &&
+                element.classList.contains("arca-link")
+              ) {
+                return;
               }
 
               if (
-                element.tagName === 'A' &&
-                (element as HTMLAnchorElement).getAttribute('href')?.startsWith('/Go?q=')
+                element.tagName === "A" &&
+                (element as HTMLAnchorElement)
+                  .getAttribute("href")
+                  ?.startsWith("/Go?q=")
               ) {
-                shouldUpdate = true
+                shouldUpdate = true;
               } else if (element.querySelector?.('a[href^="/Go?q="]')) {
-                shouldUpdate = true
+                shouldUpdate = true;
               }
             }
-          })
+          });
         }
-      })
+      });
 
       if (shouldUpdate) {
-        console.log(`${LOG_PREFIX} 실검 업데이트 감지, 링크 추가 시도`)
-        setTimeout(addArcaLinks, DOM_READY_DELAY_MS)
+        console.log(`${LOG_PREFIX} 실검 업데이트 감지, 링크 추가 시도`);
+        setTimeout(addArcaLinks, DOM_READY_DELAY_MS);
       }
     }
 
     if (hasAttributeMutation) {
-      handleAttributeChanges(mutations)
+      handleAttributeChanges(mutations);
     }
-  })
+  });
 
   observer.observe(realtimeContainer, {
     childList: true,
     attributes: true,
-    attributeFilter: ['href'],
-    subtree: true
-  })
+    attributeFilter: ["href"],
+    subtree: true,
+  });
 
-  console.log(`${LOG_PREFIX} MutationObserver 설정 완료`)
+  console.log(`${LOG_PREFIX} MutationObserver 설정 완료`);
+}
+
+/**
+ * Set up MutationObserver on the realtime keyword container.
+ * Retries up to 5 times (500ms apart) if the container is not yet in the DOM.
+ * Does not fall back to document.body.
+ */
+export function observeRealtimeUpdates(): void {
+  for (const selector of CONTAINER_SELECTORS) {
+    const container = document.querySelector(selector);
+    if (container) {
+      console.log(`${LOG_PREFIX} 컨테이너 발견: ${selector}`);
+      setupObserver(container);
+      return;
+    }
+  }
+
+  const MAX_RETRIES = 5;
+  const RETRY_INTERVAL_MS = 500;
+  let retryCount = 0;
+
+  const retryTimer = setInterval(() => {
+    retryCount++;
+    for (const selector of CONTAINER_SELECTORS) {
+      const container = document.querySelector(selector);
+      if (container) {
+        clearInterval(retryTimer);
+        console.log(
+          `${LOG_PREFIX} 컨테이너 발견 (재시도 ${retryCount}): ${selector}`,
+        );
+        setupObserver(container);
+        return;
+      }
+    }
+    if (retryCount >= MAX_RETRIES) {
+      clearInterval(retryTimer);
+      console.log(
+        `${LOG_PREFIX} 컨테이너를 찾지 못해 감시를 시작하지 않습니다.`,
+      );
+    }
+  }, RETRY_INTERVAL_MS);
 }

@@ -3,10 +3,7 @@
   "name": "나무위키 실검 아카라이브 링커",
   "version": "1.2.0",
   "description": "나무위키 실시간 검색어 옆에 아카라이브 링크를 추가하고, 검색어 변경을 자동 추적합니다",
-  "host_permissions": [
-    "https://namu.wiki/*",
-    "https://arca.live/*"
-  ],
+  "host_permissions": ["https://namu.wiki/*", "https://arca.live/*"],
   "permissions": ["storage"],
   "action": {
     "default_popup": "dist/popup.html",
@@ -21,6 +18,9 @@
       "run_at": "document_end"
     }
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none';"
+  },
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

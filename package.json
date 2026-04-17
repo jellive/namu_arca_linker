@@ -1,12 +1,18 @@
 {
   "name": "namu_arca_linker",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "나무위키 실시간 검색어 옆에 아카라이브 링크를 자동으로 추가해주는 Chrome Extension입니다.",
   "main": "content.js",
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch",
-    "test": "vitest"
+    "test": "vitest",
+    "test:run": "vitest run",
+    "lint": "eslint \"src/**/*.ts\"",
+    "lint:fix": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier --write \"src/**/*.{ts,html,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,html,css}\"",
+    "release": "npm run test:run && npm run lint && npm run build && node scripts/build-release.mjs"
   },
   "repository": {
     "type": "git",
@@ -21,7 +27,13 @@
   },
   "homepage": "https://github.com/jellive/namu_arca_linker#readme",
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.2",
     "jsdom": "^28.1.0",
+    "prettier": "^3.8.3",
+    "terser": "^5.46.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "vitest": "^4.0.18"
