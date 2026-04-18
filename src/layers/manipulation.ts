@@ -15,7 +15,8 @@ function sanitizeUrl(url: string): string {
       return `https://arca.live/b/namuhotnow?target=all&keyword=`;
     }
     return url;
-  } catch {
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} sanitizeUrl: 잘못된 URL 형식 —`, error);
     return `https://arca.live/b/namuhotnow?target=all&keyword=`;
   }
 }

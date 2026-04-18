@@ -1,63 +1,78 @@
-import { LOG_PREFIX, NAV_DELAY_MS } from './constants/config'
-import { addArcaLinks } from './layers/manipulation'
-import { observeRealtimeUpdates } from './layers/observer'
+import { LOG_PREFIX, NAV_DELAY_MS } from "./constants/config";
+import { addArcaLinks } from "./layers/manipulation";
+import { observeRealtimeUpdates } from "./layers/observer";
 
 interface TargetSite {
-  name: string
-  url: string
+  name: string;
+  url: string;
 }
 
-function getStorageState(): Promise<{ enabled: boolean; targetSites: TargetSite[] }> {
-  return new Promise(resolve => {
-    chrome.storage.local.get({ enabled: true }, local => {
-      chrome.storage.sync.get({ targetSites: [] }, sync => {
+function getStorageState(): Promise<{
+  enabled: boolean;
+  targetSites: TargetSite[];
+}> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get({ enabled: true }, (local) => {
+      if (chrome.runtime.lastError) {
+        console.warn(
+          `${LOG_PREFIX} getStorageState(local): 스토리지 읽기 실패 —`,
+          chrome.runtime.lastError.message,
+        );
+      }
+      chrome.storage.sync.get({ targetSites: [] }, (sync) => {
+        if (chrome.runtime.lastError) {
+          console.warn(
+            `${LOG_PREFIX} getStorageState(sync): 스토리지 읽기 실패 —`,
+            chrome.runtime.lastError.message,
+          );
+        }
         resolve({
-          enabled: local['enabled'] as boolean,
-          targetSites: sync['targetSites'] as TargetSite[]
-        })
-      })
-    })
-  })
+          enabled: local["enabled"] as boolean,
+          targetSites: sync["targetSites"] as TargetSite[],
+        });
+      });
+    });
+  });
 }
 
 async function init(): Promise<void> {
-  const { enabled } = await getStorageState()
+  const { enabled } = await getStorageState();
 
   if (!enabled) {
-    console.log(`${LOG_PREFIX} 비활성화 상태 — 실행 건너뜀`)
-    return
+    console.log(`${LOG_PREFIX} 비활성화 상태 — 실행 건너뜀`);
+    return;
   }
 
-  console.log(`${LOG_PREFIX} 익스텐션 시작`)
+  console.log(`${LOG_PREFIX} 익스텐션 시작`);
 
-  await addArcaLinks()
-  observeRealtimeUpdates()
+  await addArcaLinks();
+  observeRealtimeUpdates();
 
   // SPA navigation support
-  if ('navigation' in window) {
-    const nav = window.navigation as EventTarget
-    nav.addEventListener('navigate', () => {
-      console.log(`${LOG_PREFIX} 페이지 내비게이션 감지`)
-      setTimeout(addArcaLinks, NAV_DELAY_MS)
-    })
+  if ("navigation" in window) {
+    const nav = window.navigation as EventTarget;
+    nav.addEventListener("navigate", () => {
+      console.log(`${LOG_PREFIX} 페이지 내비게이션 감지`);
+      setTimeout(addArcaLinks, NAV_DELAY_MS);
+    });
   }
 }
 
 // Re-check enabled state when it changes via popup toggle
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && 'enabled' in changes) {
-    const newEnabled = changes['enabled']?.newValue as boolean
+  if (area === "local" && "enabled" in changes) {
+    const newEnabled = changes["enabled"]?.newValue as boolean;
     if (newEnabled) {
-      console.log(`${LOG_PREFIX} 활성화됨 — 링크 추가`)
-      addArcaLinks()
+      console.log(`${LOG_PREFIX} 활성화됨 — 링크 추가`);
+      addArcaLinks();
     } else {
-      console.log(`${LOG_PREFIX} 비활성화됨`)
+      console.log(`${LOG_PREFIX} 비활성화됨`);
     }
   }
-})
+});
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init)
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
 } else {
-  init()
+  init();
 }

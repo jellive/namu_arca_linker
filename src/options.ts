@@ -13,6 +13,14 @@ const DEFAULT_TARGET_SITES: TargetSite[] = [
 async function loadSites(): Promise<TargetSite[]> {
   return new Promise((resolve) => {
     chrome.storage.sync.get({ targetSites: DEFAULT_TARGET_SITES }, (data) => {
+      if (chrome.runtime.lastError) {
+        console.warn(
+          "[나무위키 아카링커] loadSites: 스토리지 읽기 실패 —",
+          chrome.runtime.lastError.message,
+        );
+        resolve(DEFAULT_TARGET_SITES);
+        return;
+      }
       resolve(data["targetSites"] as TargetSite[]);
     });
   });
@@ -22,14 +30,25 @@ function isAllowedUrl(url: string): boolean {
   try {
     const parsed = new URL(url.replace("{keyword}", "test"));
     return parsed.protocol === "https:" || parsed.protocol === "http:";
-  } catch {
+  } catch (error) {
+    console.warn("[나무위키 아카링커] isAllowedUrl: URL 파싱 실패 —", error);
     return false;
   }
 }
 
 async function saveSites(sites: TargetSite[]): Promise<void> {
-  return new Promise((resolve) => {
-    chrome.storage.sync.set({ targetSites: sites }, resolve);
+  return new Promise((resolve, reject) => {
+    chrome.storage.sync.set({ targetSites: sites }, () => {
+      if (chrome.runtime.lastError) {
+        console.warn(
+          "[나무위키 아카링커] saveSites: 스토리지 저장 실패 —",
+          chrome.runtime.lastError.message,
+        );
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      resolve();
+    });
   });
 }
 
@@ -145,14 +164,22 @@ async function init(): Promise<void> {
       showStatus(`유효하지 않은 URL입니다: ${invalidSite.url}`, true);
       return;
     }
-    await saveSites(current);
-    showStatus("저장되었습니다.");
+    try {
+      await saveSites(current);
+      showStatus("저장되었습니다.");
+    } catch {
+      showStatus("저장에 실패했습니다.", true);
+    }
   });
 
   resetBtn.addEventListener("click", async () => {
-    await saveSites(DEFAULT_TARGET_SITES);
-    renderSites(DEFAULT_TARGET_SITES);
-    showStatus("기본값으로 초기화되었습니다.");
+    try {
+      await saveSites(DEFAULT_TARGET_SITES);
+      renderSites(DEFAULT_TARGET_SITES);
+      showStatus("기본값으로 초기화되었습니다.");
+    } catch {
+      showStatus("초기화에 실패했습니다.", true);
+    }
   });
 }
 
