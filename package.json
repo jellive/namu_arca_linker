@@ -31,6 +31,7 @@
   },
   "homepage": "https://github.com/jellive/namu_arca_linker#readme",
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "chrome-webstore-upload-cli": "^3.5.0",

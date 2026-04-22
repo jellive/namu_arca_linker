@@ -91,3 +91,8 @@ dev-debug.log
 .cursor/
 
 *.bak
+
+# Playwright outputs
+test-results/
+playwright-report/
+.playwright-mcp/
