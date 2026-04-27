@@ -1,23 +1,26 @@
 {
   "manifest_version": 3,
   "name": "나무위키 실검 아카라이브 링커",
-  "version": "1.0.0",
-  "description": "나무위키 실시간 검색어 옆에 아카라이브 링크를 추가합니다",
-  "permissions": [
-    "storage"
-  ],
-  "host_permissions": [
-    "https://namu.wiki/*",
-    "https://arca.live/*"
-  ],
+  "version": "1.2.0",
+  "description": "나무위키 실시간 검색어 옆에 아카라이브 링크를 추가하고, 검색어 변경을 자동 추적합니다",
+  "host_permissions": ["https://namu.wiki/*", "https://arca.live/*"],
+  "permissions": ["storage"],
+  "action": {
+    "default_popup": "dist/popup.html",
+    "default_title": "나무위키 아카링커"
+  },
+  "options_page": "dist/options.html",
   "content_scripts": [
     {
       "matches": ["https://namu.wiki/*"],
-      "js": ["content.js"],
+      "js": ["dist/content.js"],
       "css": ["styles.css"],
       "run_at": "document_end"
     }
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none';"
+  },
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

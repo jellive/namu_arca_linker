@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self';"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>나무위키 아카링커</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --surface: #f5f5f5;
+        --border: #e0e0e0;
+        --text: #1a1a1a;
+        --text-sub: #666666;
+        --accent: #4a90d9;
+        --on-color: #2ecc71;
+        --off-color: #999999;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1e1e1e;
+          --surface: #2a2a2a;
+          --border: #3a3a3a;
+          --text: #f0f0f0;
+          --text-sub: #aaaaaa;
+          --accent: #5ba3e8;
+          --on-color: #2ecc71;
+          --off-color: #666666;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        width: 280px;
+        padding: 16px;
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .header h1 {
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--surface);
+        border-radius: 8px;
+        padding: 12px 14px;
+        margin-bottom: 12px;
+      }
+
+      .toggle-label {
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      .status-on {
+        font-size: 11px;
+        color: var(--on-color);
+      }
+
+      .status-off {
+        font-size: 11px;
+        color: var(--off-color);
+      }
+
+      .switch {
+        position: relative;
+        width: 40px;
+        height: 22px;
+      }
+
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .slider {
+        position: absolute;
+        inset: 0;
+        background: var(--off-color);
+        border-radius: 22px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .slider::before {
+        content: "";
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        left: 3px;
+        top: 3px;
+        background: #ffffff;
+        border-radius: 50%;
+        transition: transform 0.2s;
+      }
+
+      input:checked + .slider {
+        background: var(--on-color);
+      }
+
+      input:checked + .slider::before {
+        transform: translateX(18px);
+      }
+
+      .stats-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--surface);
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-bottom: 12px;
+      }
+
+      .stats-label {
+        font-size: 12px;
+        color: var(--text-sub);
+      }
+
+      .stats-count {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--accent);
+      }
+
+      .options-btn {
+        width: 100%;
+        padding: 9px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        font-size: 12px;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+
+      .options-btn:hover {
+        background: var(--border);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>나무위키 아카링커</h1>
+    </div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">링크 추가</div>
+        <div id="status-text" class="status-on">활성화됨</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="toggle" checked />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="stats-row">
+      <span class="stats-label">감지된 검색어</span>
+      <span class="stats-count" id="keyword-count">0</span>
+    </div>
+
+    <button class="options-btn" id="options-btn">설정 (사이트 커스텀)</button>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

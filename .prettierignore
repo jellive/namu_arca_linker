@@ -1,0 +1,7 @@
+dist/
+release/
+node_modules/
+package-lock.json
+content.js
+content.js.bak
+*.md
