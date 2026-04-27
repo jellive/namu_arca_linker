@@ -1,39 +1,7 @@
 import { LOG_PREFIX, NAV_DELAY_MS } from "./constants/config";
 import { addArcaLinks } from "./layers/manipulation";
 import { observeRealtimeUpdates } from "./layers/observer";
-
-interface TargetSite {
-  name: string;
-  url: string;
-}
-
-function getStorageState(): Promise<{
-  enabled: boolean;
-  targetSites: TargetSite[];
-}> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get({ enabled: true }, (local) => {
-      if (chrome.runtime.lastError) {
-        console.warn(
-          `${LOG_PREFIX} getStorageState(local): 스토리지 읽기 실패 —`,
-          chrome.runtime.lastError.message,
-        );
-      }
-      chrome.storage.sync.get({ targetSites: [] }, (sync) => {
-        if (chrome.runtime.lastError) {
-          console.warn(
-            `${LOG_PREFIX} getStorageState(sync): 스토리지 읽기 실패 —`,
-            chrome.runtime.lastError.message,
-          );
-        }
-        resolve({
-          enabled: local["enabled"] as boolean,
-          targetSites: sync["targetSites"] as TargetSite[],
-        });
-      });
-    });
-  });
-}
+import { getStorageState } from "./lib/storage";
 
 async function init(): Promise<void> {
   const { enabled } = await getStorageState();
