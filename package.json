@@ -1,7 +1,7 @@
 {
   "name": "namu_arca_linker",
   "version": "1.2.0",
-  "description": "나무위키 실시간 검색어 옆에 아카라이브 링크를 자동으로 추가해주는 Chrome Extension입니다.",
+  "description": "\ub098\ubb34\uc704\ud0a4 \uc2e4\uc2dc\uac04 \uac80\uc0c9\uc5b4 \uc606\uc5d0 \uc544\uce74\ub77c\uc774\ube0c \ub9c1\ud06c\ub97c \uc790\ub3d9\uc73c\ub85c \ucd94\uac00\ud574\uc8fc\ub294 Chrome Extension\uc785\ub2c8\ub2e4.",
   "main": "content.js",
   "scripts": {
     "build": "vite build",
@@ -16,7 +16,8 @@
     "deploy:upload": "dotenv -e .env -- chrome-webstore-upload upload --source release/namu_arca_linker-v$npm_package_version.zip",
     "deploy:publish": "dotenv -e .env -- chrome-webstore-upload publish",
     "deploy:status": "dotenv -e .env -- node scripts/check-cws.mjs",
-    "deploy": "npm run release && npm run deploy:upload && npm run deploy:publish"
+    "deploy": "npm run release && npm run deploy:upload && npm run deploy:publish",
+    "test:mutation": "stryker run"
   },
   "repository": {
     "type": "git",
@@ -32,6 +33,9 @@
   "homepage": "https://github.com/jellive/namu_arca_linker#readme",
   "devDependencies": {
     "@playwright/test": "^1.59.1",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/typescript-checker": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "@vitest/coverage-v8": "^4.1.5",

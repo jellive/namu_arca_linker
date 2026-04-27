@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Stryker mutation testing config for the Chrome extension. constants/* and content.ts entry are excluded — the entry is a 3-line bootstrap with no testable logic and constants are pure value declarations.",
+  "packageManager": "pnpm",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "reporters": ["html", "clear-text", "progress"],
+  "testRunner": "vitest",
+  "vitest": {
+    "configFile": "vitest.config.ts"
+  },
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "src/**/*.ts",
+    "!src/**/*.test.ts",
+    "!src/constants/**",
+    "!src/content.ts",
+    "!src/popup.ts",
+    "!src/options.ts",
+    "!src/types/**"
+  ],
+  "thresholds": {
+    "high": 80,
+    "low": 60,
+    "break": 65
+  },
+  "concurrency": 4,
+  "disableTypeChecks": "src/**/*.ts"
+}

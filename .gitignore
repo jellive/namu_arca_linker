@@ -100,5 +100,9 @@ playwright-report/
 # Coverage reports
 coverage/
 
+# Stryker mutation testing artifacts
+.stryker-tmp/
+reports/
+
 # claude code session config
 .claude/
