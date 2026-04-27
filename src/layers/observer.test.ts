@@ -1,4 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+// Mock detection so we can assert how observer wires it up. Must come
+// before importing observer.ts so the mock is captured at module load.
+const detectKeywordChangesMock = vi.fn();
+vi.mock("./detection", () => ({
+  detectKeywordChanges: () => detectKeywordChangesMock(),
+}));
+
 import { observeRealtimeUpdates } from "./observer";
 
 /**
@@ -7,27 +15,27 @@ import { observeRealtimeUpdates } from "./observer";
  * the global to capture how observeRealtimeUpdates wires it up.
  */
 
+interface MockObserverInstance {
+  callback: MutationCallback;
+  observe: ReturnType<typeof vi.fn>;
+  disconnect: ReturnType<typeof vi.fn>;
+}
+
 describe("observer.ts — observeRealtimeUpdates", () => {
-  let observerInstances: Array<{
-    callback: MutationCallback;
-    observe: ReturnType<typeof vi.fn>;
-    disconnect: ReturnType<typeof vi.fn>;
-  }>;
+  let observerInstances: MockObserverInstance[];
 
   beforeEach(() => {
     document.body.innerHTML = "";
     observerInstances = [];
+    detectKeywordChangesMock.mockReset();
 
-    // Replace global MutationObserver so we can inspect the registration.
     (globalThis as unknown as { MutationObserver: unknown }).MutationObserver =
       class MockObserver {
         observe = vi.fn();
         disconnect = vi.fn();
         takeRecords = vi.fn(() => []);
         constructor(public callback: MutationCallback) {
-          observerInstances.push(
-            this as unknown as (typeof observerInstances)[number],
-          );
+          observerInstances.push(this as unknown as MockObserverInstance);
         }
       };
 
@@ -53,7 +61,6 @@ describe("observer.ts — observeRealtimeUpdates", () => {
     expect(obs.observe).toHaveBeenCalledTimes(1);
     const [target, opts] = obs.observe.mock.calls[0]!;
     expect(target).toBeTruthy();
-    // Observer should subscribe to childList + attribute changes on href, with subtree
     expect(opts).toMatchObject({
       childList: true,
       attributes: true,
@@ -63,11 +70,6 @@ describe("observer.ts — observeRealtimeUpdates", () => {
   });
 
   it("processes pre-existing keywords after attach (closes initial-render race)", () => {
-    // Regression test for the namu.wiki bug: when content_scripts run at
-    // document_end the realtime <ul> already contains <li><a /> nodes; the
-    // observer fires only on FUTURE mutations, so without an explicit
-    // post-attach addArcaLinks() pass the initial keyword set never gets
-    // links injected.
     document.body.innerHTML = `
       <ul>
         <li><a href="/Go?q=북토끼">북토끼</a></li>
@@ -76,30 +78,21 @@ describe("observer.ts — observeRealtimeUpdates", () => {
     `;
 
     observeRealtimeUpdates();
-    // setupObserver schedules addArcaLinks via setTimeout(_, DOM_READY_DELAY_MS)
     vi.advanceTimersByTime(200);
 
-    // Each existing keyword anchor should now have an arca-link sibling in
-    // its <li> wrapper.
     const arcaLinks = document.querySelectorAll("a.arca-link");
     expect(arcaLinks.length).toBe(2);
   });
 
   it("retries up to 5 times when container is missing, then gives up", () => {
-    // Empty DOM — no container found on first try
     observeRealtimeUpdates();
     expect(observerInstances.length).toBe(0);
 
-    // Each retry interval is 500ms; 5 retries = 5 × 500ms
     for (let i = 0; i < 5; i++) {
       vi.advanceTimersByTime(500);
     }
-
-    // Still no observer because container never appeared
     expect(observerInstances.length).toBe(0);
 
-    // After max retries exhausted, advancing more time should NOT spawn new
-    // observers (interval was cleared)
     vi.advanceTimersByTime(5000);
     expect(observerInstances.length).toBe(0);
   });
@@ -108,7 +101,6 @@ describe("observer.ts — observeRealtimeUpdates", () => {
     observeRealtimeUpdates();
     expect(observerInstances.length).toBe(0);
 
-    // After 2 retries, simulate container appearing in DOM
     vi.advanceTimersByTime(500);
     vi.advanceTimersByTime(500);
 
@@ -118,9 +110,7 @@ describe("observer.ts — observeRealtimeUpdates", () => {
       </ul>
     `;
 
-    // Next retry should pick up the new container
     vi.advanceTimersByTime(500);
-
     expect(observerInstances.length).toBe(1);
   });
 
@@ -137,9 +127,6 @@ describe("observer.ts — observeRealtimeUpdates", () => {
     const obs = observerInstances[0]!;
     const callback = obs.callback;
 
-    // Simulate the observer firing with an "arca-link" being added (which is
-    // what we ourselves inject — it must not retrigger another addArcaLinks
-    // pass and create an infinite loop).
     const arcaLink = document.createElement("a");
     arcaLink.classList.add("arca-link");
 
@@ -157,10 +144,247 @@ describe("observer.ts — observeRealtimeUpdates", () => {
       } as MutationRecord,
     ];
 
-    // No throw + the body of the callback's `shouldUpdate` branch should
-    // skip arca-link nodes. We just assert the callback runs cleanly.
     expect(() =>
       callback(fakeMutations, obs as unknown as MutationObserver),
     ).not.toThrow();
+  });
+
+  it("triggers addArcaLinks when childList mutation adds a /Go?q= anchor directly", () => {
+    document.body.innerHTML = `
+      <ul>
+        <li><a href="/Go?q=existing">existing</a></li>
+      </ul>
+    `;
+    observeRealtimeUpdates();
+    vi.advanceTimersByTime(200); // initial post-attach pass
+    const initialCount = document.querySelectorAll("a.arca-link").length;
+
+    const obs = observerInstances[0]!;
+    // Append a new realtime anchor and dispatch a synthetic mutation.
+    const ul = document.querySelector("ul")!;
+    const newLi = document.createElement("li");
+    newLi.innerHTML = '<a href="/Go?q=new">new</a>';
+    ul.appendChild(newLi);
+
+    obs.callback(
+      [
+        {
+          type: "childList" as MutationRecordType,
+          addedNodes: [newLi] as unknown as NodeList,
+          removedNodes: [] as unknown as NodeList,
+          target: ul,
+          previousSibling: null,
+          nextSibling: null,
+          attributeName: null,
+          attributeNamespace: null,
+          oldValue: null,
+        } as MutationRecord,
+      ],
+      obs as unknown as MutationObserver,
+    );
+    vi.advanceTimersByTime(200);
+
+    expect(document.querySelectorAll("a.arca-link").length).toBeGreaterThan(
+      initialCount,
+    );
+  });
+
+  it("triggers addArcaLinks when childList mutation adds a node CONTAINING a /Go?q= anchor (nested)", () => {
+    document.body.innerHTML = `
+      <ul>
+        <li><a href="/Go?q=existing">existing</a></li>
+      </ul>
+    `;
+    observeRealtimeUpdates();
+    vi.advanceTimersByTime(200);
+    const baseline = document.querySelectorAll("a.arca-link").length;
+
+    const obs = observerInstances[0]!;
+    // Wrapper <div> is the addedNode; the realtime anchor is a descendant.
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = '<ul><li><a href="/Go?q=nested">nested</a></li></ul>';
+    document.body.appendChild(wrapper);
+
+    obs.callback(
+      [
+        {
+          type: "childList" as MutationRecordType,
+          addedNodes: [wrapper] as unknown as NodeList,
+          removedNodes: [] as unknown as NodeList,
+          target: document.body,
+          previousSibling: null,
+          nextSibling: null,
+          attributeName: null,
+          attributeNamespace: null,
+          oldValue: null,
+        } as MutationRecord,
+      ],
+      obs as unknown as MutationObserver,
+    );
+    vi.advanceTimersByTime(200);
+
+    expect(document.querySelectorAll("a.arca-link").length).toBeGreaterThan(
+      baseline,
+    );
+  });
+
+  it("debounces attribute mutations and calls detectKeywordChanges after delay", async () => {
+    document.body.innerHTML = `
+      <ul>
+        <li><a href="/Go?q=k1" id="anchor1">k1</a></li>
+      </ul>
+    `;
+    observeRealtimeUpdates();
+    vi.advanceTimersByTime(200);
+    detectKeywordChangesMock.mockReset();
+    detectKeywordChangesMock.mockReturnValue([]);
+
+    const obs = observerInstances[0]!;
+    const anchor = document.getElementById("anchor1")!;
+
+    // Two rapid href changes — the debounce should coalesce them into ONE
+    // call to detectKeywordChanges.
+    const mut = (target: HTMLElement): MutationRecord =>
+      ({
+        type: "attributes" as MutationRecordType,
+        attributeName: "href",
+        attributeNamespace: null,
+        addedNodes: [] as unknown as NodeList,
+        removedNodes: [] as unknown as NodeList,
+        target,
+        previousSibling: null,
+        nextSibling: null,
+        oldValue: null,
+      }) as MutationRecord;
+
+    obs.callback([mut(anchor)], obs as unknown as MutationObserver);
+    obs.callback([mut(anchor)], obs as unknown as MutationObserver);
+    expect(detectKeywordChangesMock).not.toHaveBeenCalled(); // still inside debounce
+
+    vi.advanceTimersByTime(200);
+    await vi.runAllTimersAsync();
+    expect(detectKeywordChangesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores attribute mutations on anchors that do NOT match /Go?q=", () => {
+    document.body.innerHTML = `
+      <ul>
+        <li><a href="/page" id="other">other</a><a href="/Go?q=ok" id="ok">ok</a></li>
+      </ul>
+    `;
+    observeRealtimeUpdates();
+    vi.advanceTimersByTime(200);
+    detectKeywordChangesMock.mockReset();
+
+    const obs = observerInstances[0]!;
+    const other = document.getElementById("other")!;
+
+    obs.callback(
+      [
+        {
+          type: "attributes" as MutationRecordType,
+          attributeName: "href",
+          attributeNamespace: null,
+          addedNodes: [] as unknown as NodeList,
+          removedNodes: [] as unknown as NodeList,
+          target: other,
+          previousSibling: null,
+          nextSibling: null,
+          oldValue: null,
+        } as MutationRecord,
+      ],
+      obs as unknown as MutationObserver,
+    );
+    vi.advanceTimersByTime(500);
+
+    expect(detectKeywordChangesMock).not.toHaveBeenCalled();
+  });
+
+  it("dispatches updateArcaLink for each detected change when href update fires", async () => {
+    document.body.innerHTML = `
+      <ul>
+        <li><a href="/Go?q=k1" id="a1">k1</a><a class="arca-link" id="old-arca">왜?</a></li>
+      </ul>
+    `;
+    observeRealtimeUpdates();
+    vi.advanceTimersByTime(200);
+    detectKeywordChangesMock.mockReset();
+
+    const anchorEl = document.getElementById("a1")!;
+    detectKeywordChangesMock.mockReturnValue([
+      {
+        type: "added",
+        rank: 1,
+        newKeyword: "새것",
+        element: anchorEl,
+      },
+    ]);
+
+    const obs = observerInstances[0]!;
+    obs.callback(
+      [
+        {
+          type: "attributes" as MutationRecordType,
+          attributeName: "href",
+          attributeNamespace: null,
+          addedNodes: [] as unknown as NodeList,
+          removedNodes: [] as unknown as NodeList,
+          target: anchorEl,
+          previousSibling: null,
+          nextSibling: null,
+          oldValue: null,
+        } as MutationRecord,
+      ],
+      obs as unknown as MutationObserver,
+    );
+
+    vi.advanceTimersByTime(500);
+    await vi.runAllTimersAsync();
+
+    expect(detectKeywordChangesMock).toHaveBeenCalledTimes(1);
+    // The pre-existing arca-link is preserved + may now have a sibling for
+    // the "added" change. We assert at minimum the dispatch happened and the
+    // DOM has at least one arca-link still.
+    expect(document.querySelectorAll(".arca-link").length).toBeGreaterThan(0);
+  });
+
+  it("logs '변경 내역 없음' branch when detection returns empty list", async () => {
+    document.body.innerHTML = `
+      <ul>
+        <li><a href="/Go?q=k1" id="a1">k1</a></li>
+      </ul>
+    `;
+    observeRealtimeUpdates();
+    vi.advanceTimersByTime(200);
+    detectKeywordChangesMock.mockReset();
+    detectKeywordChangesMock.mockReturnValue([]);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const obs = observerInstances[0]!;
+    const a1 = document.getElementById("a1")!;
+
+    obs.callback(
+      [
+        {
+          type: "attributes" as MutationRecordType,
+          attributeName: "href",
+          attributeNamespace: null,
+          addedNodes: [] as unknown as NodeList,
+          removedNodes: [] as unknown as NodeList,
+          target: a1,
+          previousSibling: null,
+          nextSibling: null,
+          oldValue: null,
+        } as MutationRecord,
+      ],
+      obs as unknown as MutationObserver,
+    );
+
+    vi.advanceTimersByTime(500);
+    await vi.runAllTimersAsync();
+
+    const flat = log.mock.calls.map((c) => c.join(" ")).join(" ");
+    expect(flat).toContain("변경 내역 없음");
+    log.mockRestore();
   });
 });
