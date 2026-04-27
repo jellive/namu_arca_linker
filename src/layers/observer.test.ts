@@ -62,6 +62,29 @@ describe("observer.ts — observeRealtimeUpdates", () => {
     expect(opts.attributeFilter).toContain("href");
   });
 
+  it("processes pre-existing keywords after attach (closes initial-render race)", () => {
+    // Regression test for the namu.wiki bug: when content_scripts run at
+    // document_end the realtime <ul> already contains <li><a /> nodes; the
+    // observer fires only on FUTURE mutations, so without an explicit
+    // post-attach addArcaLinks() pass the initial keyword set never gets
+    // links injected.
+    document.body.innerHTML = `
+      <ul>
+        <li><a href="/Go?q=북토끼">북토끼</a></li>
+        <li><a href="/Go?q=키워드2">키워드2</a></li>
+      </ul>
+    `;
+
+    observeRealtimeUpdates();
+    // setupObserver schedules addArcaLinks via setTimeout(_, DOM_READY_DELAY_MS)
+    vi.advanceTimersByTime(200);
+
+    // Each existing keyword anchor should now have an arca-link sibling in
+    // its <li> wrapper.
+    const arcaLinks = document.querySelectorAll("a.arca-link");
+    expect(arcaLinks.length).toBe(2);
+  });
+
   it("retries up to 5 times when container is missing, then gives up", () => {
     // Empty DOM — no container found on first try
     observeRealtimeUpdates();

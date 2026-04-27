@@ -108,6 +108,14 @@ function setupObserver(realtimeContainer: Element): void {
   });
 
   console.log(`${LOG_PREFIX} MutationObserver 설정 완료`);
+
+  // Process any keyword anchors that were already in the container by the
+  // time the observer attached. MutationObserver only fires for FUTURE
+  // mutations, so without this call we silently miss the initial render —
+  // which is exactly what happens on namu.wiki today (script runs at
+  // document_end before the realtime list is populated, then the list
+  // appears with no further childList mutations on the container itself).
+  setTimeout(addArcaLinks, DOM_READY_DELAY_MS);
 }
 
 /**
