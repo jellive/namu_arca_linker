@@ -316,3 +316,93 @@ describe("addArcaLinks — DOM scan + injection", () => {
     expect(document.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(1);
   });
 });
+
+describe("updateExistingLink — element outside <li> (parentNode fallback)", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("uses parentNode.querySelector when element has no <li> ancestor", async () => {
+    // Pin L87 OptionalChaining + L107 OptionalChaining (parentNode fallback)
+    // and L106 BlockStatement (the parentLi-absent branch). Stryker leaves
+    // these no-coverage when every test wraps the anchor in <li>.
+    vi.useFakeTimers();
+    document.body.innerHTML = `
+      <div id="container">
+        <a id="target">target</a>
+        <a class="${CSS_CLASS_ARCA_LINK}">왜?</a>
+      </div>
+    `;
+    const anchor = document.getElementById("target") as HTMLElement;
+
+    const promise = updateArcaLink({
+      type: "modified",
+      rank: 1,
+      oldKeyword: "old",
+      newKeyword: "신규아카",
+      element: anchor,
+    });
+    await vi.runAllTimersAsync();
+    await promise;
+
+    const container = document.getElementById("container") as HTMLElement;
+    const arcaLinks = container.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`);
+    expect(arcaLinks.length).toBe(1);
+    expect((arcaLinks[0] as HTMLAnchorElement).title).toContain("신규아카");
+    // The new link should be inserted via parentNode.insertBefore — i.e.
+    // before the original target's nextSibling (which is the old arca-link
+    // before removal). After the swap, the new link should still be a
+    // direct child of #container (NOT placed under a phantom <li>).
+    expect((arcaLinks[0] as HTMLElement).parentElement?.id).toBe("container");
+  });
+
+  it("addNewLink uses parentLi.appendChild (link goes to end of <li>, after siblings)", async () => {
+    // Pin L62 `if (parentLi && !parentLi.querySelector(...))`. With
+    // ConditionalExpression `→ false`, the branch is skipped → falls to
+    // else-if `parentNode.insertBefore(arcaLink, element.nextSibling)`,
+    // which places the link BEFORE the target's next sibling — not at
+    // the end of <li>. By having a sibling AFTER the target inside <li>,
+    // the two paths diverge:
+    //   appendChild: arcaLink is the LAST child of <li>.
+    //   insertBefore: arcaLink sits between target and the sibling.
+    document.body.innerHTML =
+      '<ul><li><a id="a">target</a><span id="after">after</span></li></ul>';
+    const anchor = document.getElementById("a") as HTMLElement;
+    await updateArcaLink({
+      type: "added",
+      rank: 1,
+      newKeyword: "키워드",
+      element: anchor,
+    });
+    const li = document.querySelector("li") as HTMLElement;
+    expect(li.lastElementChild?.classList.contains(CSS_CLASS_ARCA_LINK)).toBe(
+      true,
+    );
+  });
+
+  it("warns and falls back to addNewLink when element has no <li> AND no existing arca-link sibling", async () => {
+    document.body.innerHTML = `
+      <div id="container">
+        <a id="target">target</a>
+      </div>
+    `;
+    const anchor = document.getElementById("target") as HTMLElement;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await updateArcaLink({
+      type: "modified",
+      rank: 1,
+      oldKeyword: "old",
+      newKeyword: "fresh",
+      element: anchor,
+    });
+
+    expect(document.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(1);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});

@@ -189,6 +189,55 @@ describe("observer.ts — observeRealtimeUpdates", () => {
     );
   });
 
+  it("triggers addArcaLinks when added node IS the /Go?q= anchor itself (not nested)", () => {
+    // Pin observer.ts:79-83 — the branch that checks
+    // `element.tagName === "A" && (...)?.getAttribute("href")?.startsWith("/Go?q=")`.
+    // Existing childList tests add wrapper elements (<li>, <div>) which
+    // hit the else-branch via querySelector. Without this test the
+    // direct-anchor branch has zero coverage and Stryker reports
+    // 6 NoCoverage mutants on lines 79-83 (MethodExpression on startsWith,
+    // OptionalChaining on getAttribute(...)?, two StringLiterals, the
+    // BlockStatement, and the BooleanLiteral assigning shouldUpdate).
+    document.body.innerHTML = `
+      <ul>
+        <li><a href="/Go?q=existing">existing</a></li>
+      </ul>
+    `;
+    observeRealtimeUpdates();
+    vi.advanceTimersByTime(200);
+    const baseline = document.querySelectorAll("a.arca-link").length;
+
+    const obs = observerInstances[0]!;
+    // Build a bare <a href="/Go?q=..."> and pass it AS the addedNode.
+    const ul = document.querySelector("ul")!;
+    const directAnchor = document.createElement("a");
+    directAnchor.setAttribute("href", "/Go?q=direct");
+    directAnchor.textContent = "direct";
+    ul.appendChild(directAnchor);
+
+    obs.callback(
+      [
+        {
+          type: "childList" as MutationRecordType,
+          addedNodes: [directAnchor] as unknown as NodeList,
+          removedNodes: [] as unknown as NodeList,
+          target: ul,
+          previousSibling: null,
+          nextSibling: null,
+          attributeName: null,
+          attributeNamespace: null,
+          oldValue: null,
+        } as MutationRecord,
+      ],
+      obs as unknown as MutationObserver,
+    );
+    vi.advanceTimersByTime(200);
+
+    expect(document.querySelectorAll("a.arca-link").length).toBeGreaterThan(
+      baseline,
+    );
+  });
+
   it("triggers addArcaLinks when childList mutation adds a node CONTAINING a /Go?q= anchor (nested)", () => {
     document.body.innerHTML = `
       <ul>
