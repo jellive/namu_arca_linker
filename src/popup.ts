@@ -1,9 +1,4 @@
-const DEFAULT_TARGET_SITES = [
-  {
-    name: "아카라이브 (나무위키 핫나우)",
-    url: "https://arca.live/b/namuhotnow?target=all&keyword={keyword}",
-  },
-];
+import { DEFAULT_TARGET_SITES } from "./constants/sites";
 
 interface StorageData {
   enabled: boolean;

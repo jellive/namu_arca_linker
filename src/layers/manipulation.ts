@@ -127,10 +127,22 @@ export async function updateArcaLink(change: KeywordChange): Promise<void> {
 
   switch (type) {
     case "added":
+      if (newKeyword === undefined) {
+        console.warn(
+          `${LOG_PREFIX} 순위 ${rank} 'added' 변경에 newKeyword 없음`,
+        );
+        break;
+      }
       addNewLink(element, newKeyword);
       break;
 
     case "modified":
+      if (newKeyword === undefined) {
+        console.warn(
+          `${LOG_PREFIX} 순위 ${rank} 'modified' 변경에 newKeyword 없음`,
+        );
+        break;
+      }
       await updateExistingLink(element, oldKeyword ?? "", newKeyword);
       break;
 
