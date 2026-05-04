@@ -24,8 +24,6 @@ npm run format             # prettier
 npm run deploy             # build + upload + publish to Chrome Web Store
 ```
 
-Both `package-lock.json` and `pnpm-lock.yaml` exist — pick one and stick to it for the session.
-
 ## Source Layout
 
 - `src/content.ts` — content script injected into namu.wiki pages
