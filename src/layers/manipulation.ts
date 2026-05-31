@@ -6,7 +6,27 @@ import {
   LOG_PREFIX,
 } from "../constants/config";
 import { REALTIME_SELECTORS } from "../constants/selectors";
+import { DEFAULT_TARGET_SITES } from "../constants/sites";
+import type { TargetSite } from "../lib/storage";
 import type { KeywordChange } from "../types/common";
+
+// User-configured search-site template (first targetSite), refreshed from
+// chrome.storage each addArcaLinks run. Previously the options page let users
+// set targetSites but the content script ignored them entirely (hardcoded arca).
+let activeSiteTemplate: string | null = null;
+
+async function refreshActiveSite(): Promise<void> {
+  try {
+    const sites = await new Promise<TargetSite[]>((resolve) => {
+      chrome.storage.sync.get({ targetSites: DEFAULT_TARGET_SITES }, (data) => {
+        resolve((data["targetSites"] as TargetSite[]) ?? DEFAULT_TARGET_SITES);
+      });
+    });
+    activeSiteTemplate = sites[0]?.url ?? null; // option ①: first configured site
+  } catch {
+    activeSiteTemplate = null; // fall back to the arca default below
+  }
+}
 
 function sanitizeUrl(url: string): string {
   try {
@@ -26,7 +46,11 @@ function sanitizeUrl(url: string): string {
  */
 export function getArcaSearchUrl(keyword: string): string {
   const encodedKeyword = encodeURIComponent(keyword);
-  const rawUrl = `${ARCA_BASE_URL}?target=all&keyword=${encodedKeyword}`;
+  const template =
+    activeSiteTemplate ?? `${ARCA_BASE_URL}?target=all&keyword={keyword}`;
+  const rawUrl = template.includes("{keyword}")
+    ? template.replace("{keyword}", encodedKeyword)
+    : `${ARCA_BASE_URL}?target=all&keyword=${encodedKeyword}`;
   return sanitizeUrl(rawUrl);
 }
 
@@ -159,6 +183,8 @@ export async function updateArcaLink(change: KeywordChange): Promise<void> {
  * Scan the DOM and add arca links to all unprocessed realtime keyword items.
  */
 export async function addArcaLinks(): Promise<void> {
+  await refreshActiveSite(); // pick up the user's configured targetSites
+
   let realtimeItems: NodeListOf<Element> | Element[] = [];
   let usedSelector = "";
 
