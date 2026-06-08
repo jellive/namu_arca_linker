@@ -1,6 +1,7 @@
 import { LOG_PREFIX, NAV_DELAY_MS } from "../constants/config";
 import { addArcaLinks } from "../layers/manipulation";
-import { observeRealtimeUpdates } from "../layers/observer";
+import { onRealtimeChange, observeRealtimeUpdates } from "../layers/observer";
+import { mountPanel, updatePanel } from "../layers/panel";
 import { getStorageState } from "./storage";
 
 /**
@@ -20,14 +21,29 @@ export async function init(): Promise<void> {
 
   console.log(`${LOG_PREFIX} 익스텐션 시작`);
 
-  await addArcaLinks();
+  const hideInline = await new Promise<boolean>((resolve) => {
+    chrome.storage.sync.get({ hideInlineLinks: false }, (v) =>
+      resolve(Boolean(v["hideInlineLinks"])),
+    );
+  });
+
+  if (!hideInline) {
+    await addArcaLinks();
+  }
   observeRealtimeUpdates();
+  await mountPanel();
+  onRealtimeChange(() => {
+    if (!hideInline) void addArcaLinks();
+    void updatePanel();
+  });
 
   if ("navigation" in window) {
     const nav = window.navigation as EventTarget;
     nav.addEventListener("navigate", () => {
-      console.log(`${LOG_PREFIX} 페이지 내비게이션 감지`);
-      setTimeout(addArcaLinks, NAV_DELAY_MS);
+      setTimeout(() => {
+        if (!hideInline) void addArcaLinks();
+        void updatePanel();
+      }, NAV_DELAY_MS);
     });
   }
 }

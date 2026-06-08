@@ -5,6 +5,9 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 // production; we only care that it gets dispatched at the right times.
 const addArcaLinks = vi.fn().mockResolvedValue(undefined);
 const observeRealtimeUpdates = vi.fn();
+const onRealtimeChange = vi.fn();
+const mountPanel = vi.fn().mockResolvedValue(undefined);
+const updatePanel = vi.fn().mockResolvedValue(undefined);
 const getStorageState = vi.fn();
 
 vi.mock("../layers/manipulation", () => ({
@@ -13,6 +16,11 @@ vi.mock("../layers/manipulation", () => ({
 vi.mock("../layers/observer", () => ({
   observeRealtimeUpdates: (...args: unknown[]) =>
     observeRealtimeUpdates(...args),
+  onRealtimeChange: (...args: unknown[]) => onRealtimeChange(...args),
+}));
+vi.mock("../layers/panel", () => ({
+  mountPanel: (...args: unknown[]) => mountPanel(...args),
+  updatePanel: (...args: unknown[]) => updatePanel(...args),
 }));
 vi.mock("./storage", () => ({
   getStorageState: () => getStorageState(),
@@ -25,11 +33,20 @@ const onChangedAdd = vi.fn();
 beforeEach(() => {
   addArcaLinks.mockClear();
   observeRealtimeUpdates.mockClear();
+  onRealtimeChange.mockClear();
+  mountPanel.mockClear();
+  updatePanel.mockClear();
   getStorageState.mockReset();
   onChangedAdd.mockClear();
   globalThis.chrome = {
     storage: {
       onChanged: { addListener: onChangedAdd },
+      sync: {
+        get: (
+          _defaults: Record<string, unknown>,
+          cb: (v: Record<string, unknown>) => void,
+        ) => cb({ hideInlineLinks: false }),
+      },
     },
   } as unknown as typeof chrome;
 });
