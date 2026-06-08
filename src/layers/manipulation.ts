@@ -12,9 +12,9 @@ import type { TargetSite } from "../lib/storage";
 import type { KeywordChange } from "../types/common";
 
 // User-configured target sites, refreshed from chrome.storage each addArcaLinks run.
-let activeSites: TargetSite[] = DEFAULT_TARGET_SITES;
+export let activeSites: TargetSite[] = DEFAULT_TARGET_SITES;
 
-async function refreshActiveSites(): Promise<void> {
+export async function refreshActiveSites(): Promise<void> {
   try {
     const sites = await new Promise<TargetSite[]>((resolve) => {
       chrome.storage.sync.get({ targetSites: DEFAULT_TARGET_SITES }, (data) => {
