@@ -1,6 +1,6 @@
 {
   "name": "namu_arca_linker",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "나무위키 실시간 검색어 옆에 아카라이브 링크를 자동으로 추가해주는 Chrome Extension입니다.",
   "main": "content.js",
   "scripts": {

@@ -109,3 +109,106 @@
     margin-left: 4px;
   }
 }
+
+/* ── 실검 인텔리전스 허브 패널 ── */
+.arca-hub {
+  position: fixed;
+  top: 80px;
+  right: 0;
+  width: 260px;
+  max-height: 70vh;
+  overflow-y: auto;
+  z-index: 99999;
+  border-radius: 8px 0 0 8px;
+  box-shadow: -2px 2px 12px rgba(0, 0, 0, 0.18);
+  font-size: 12px;
+}
+.arca-hub-header {
+  padding: 8px 10px;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+}
+.arca-hub-body {
+  padding: 4px 10px 10px;
+}
+.arca-hub-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 0;
+}
+.arca-hub-rank {
+  width: 16px;
+  text-align: right;
+  opacity: 0.6;
+}
+.arca-hub-kw {
+  font-weight: 500;
+}
+.arca-hub-badge {
+  font-size: 10px;
+  min-width: 14px;
+}
+.arca-hub-badge-up {
+  color: #e0245e;
+}
+.arca-hub-badge-down {
+  color: #1d9bf0;
+}
+.arca-hub-badge-new {
+  color: #f5a623;
+  font-weight: 700;
+}
+.arca-hub-empty {
+  opacity: 0.6;
+  padding: 10px 0;
+}
+.arca-hub-toggle {
+  position: fixed;
+  bottom: 24px;
+  right: 16px;
+  z-index: 99999;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.theseed-light-mode .arca-hub {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  color: #222;
+}
+.theseed-light-mode .arca-hub-header {
+  background: #f5f7fa;
+  border-bottom: 1px solid #e0e0e0;
+}
+.theseed-light-mode .arca-hub-toggle {
+  background: #0275d8;
+  color: #fff;
+}
+.theseed-dark-mode .arca-hub {
+  background: #1f1f24;
+  border: 1px solid #3a3a42;
+  color: #ddd;
+}
+.theseed-dark-mode .arca-hub-header {
+  background: #2a2a31;
+  border-bottom: 1px solid #3a3a42;
+}
+.theseed-dark-mode .arca-hub-toggle {
+  background: #c084fc;
+  color: #1a1a1a;
+}
+
+@media (max-width: 900px) {
+  .arca-hub {
+    width: 200px;
+    font-size: 11px;
+  }
+}
