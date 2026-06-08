@@ -7,7 +7,11 @@ vi.mock("./detection", () => ({
   detectKeywordChanges: () => detectKeywordChangesMock(),
 }));
 
-import { observeRealtimeUpdates } from "./observer";
+import {
+  observeRealtimeUpdates,
+  onRealtimeChange,
+  emitRealtimeChange,
+} from "./observer";
 
 /**
  * Tests for the MutationObserver wrapper that watches namu.wiki's realtime
@@ -446,5 +450,14 @@ describe("observer.ts — observeRealtimeUpdates", () => {
     const flat = log.mock.calls.map((c) => c.join(" ")).join(" ");
     expect(flat).toContain("변경 내역 없음");
     log.mockRestore();
+  });
+});
+
+describe("onRealtimeChange pub/sub", () => {
+  it("invokes registered listeners when a change is emitted", () => {
+    let calls = 0;
+    onRealtimeChange(() => calls++);
+    emitRealtimeChange();
+    expect(calls).toBe(1);
   });
 });

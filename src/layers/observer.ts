@@ -7,6 +7,24 @@ import { CONTAINER_SELECTORS } from "../constants/selectors";
 import { detectKeywordChanges } from "./detection";
 import { addArcaLinks, updateArcaLink } from "./manipulation";
 
+const realtimeChangeListeners: Array<() => void> = [];
+
+/** Subscribe to "realtime keywords changed" events (used by the hub panel). */
+export function onRealtimeChange(cb: () => void): void {
+  realtimeChangeListeners.push(cb);
+}
+
+/** Notify subscribers. Exported for tests; called internally on change. */
+export function emitRealtimeChange(): void {
+  for (const cb of realtimeChangeListeners) {
+    try {
+      cb();
+    } catch (e) {
+      console.warn("[나무위키 아카링커] onRealtimeChange listener error", e);
+    }
+  }
+}
+
 /**
  * Handle href attribute changes on realtime search links.
  * Debounced to 100ms to batch rapid DOM updates.
@@ -51,6 +69,7 @@ async function onRealtimeSearchChanged(
   } else {
     console.log(`${LOG_PREFIX} 변경 내역 없음`);
   }
+  emitRealtimeChange();
 }
 
 function setupObserver(realtimeContainer: Element): void {
