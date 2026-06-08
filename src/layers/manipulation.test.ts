@@ -1,64 +1,79 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
-  getArcaSearchUrl,
-  createArcaLink,
+  buildSearchUrl,
+  createSiteLink,
+  createLinksContainer,
   addNewLink,
   updateArcaLink,
   addArcaLinks,
 } from "./manipulation";
-import { CSS_CLASS_ARCA_LINK, DATA_ATTR_PROCESSED } from "../constants/config";
+import {
+  CSS_CLASS_ARCA_LINK,
+  CSS_CLASS_LINKS_CONTAINER,
+  DATA_ATTR_PROCESSED,
+} from "../constants/config";
+import type { TargetSite } from "../lib/storage";
 
-describe("getArcaSearchUrl", () => {
-  it("builds correct URL for ASCII keyword", () => {
-    const url = getArcaSearchUrl("hello");
-    expect(url).toBe("https://arca.live/b/namuhotnow?target=all&keyword=hello");
-  });
-
-  it("encodes Korean keyword", () => {
-    const url = getArcaSearchUrl("한국");
+describe("buildSearchUrl", () => {
+  it("substitutes + URL-encodes the keyword", () => {
+    const url = buildSearchUrl(
+      "https://arca.live/b/namuhotnow?target=all&keyword={keyword}",
+      "한국",
+    );
     expect(url).toContain("keyword=%ED%95%9C%EA%B5%AD");
   });
 
   it("encodes special characters", () => {
-    const url = getArcaSearchUrl("a b+c");
-    expect(url).toContain("keyword=a%20b%2Bc");
+    const url = buildSearchUrl("https://x.com/search?q={keyword}", "a b+c");
+    expect(url).toContain("q=a%20b%2Bc");
   });
 
-  it("returns a valid https URL for empty keyword", () => {
-    const url = getArcaSearchUrl("");
-    expect(url.startsWith("https://")).toBe(true);
-    expect(url).toContain("keyword=");
+  it("returns '' when the template has no {keyword} placeholder", () => {
+    expect(buildSearchUrl("https://example.com/", "x")).toBe("");
   });
 
-  it("uses target=all query parameter", () => {
-    const url = getArcaSearchUrl("test");
-    const parsed = new URL(url);
-    expect(parsed.searchParams.get("target")).toBe("all");
+  it("returns '' for a non-http(s) template", () => {
+    expect(buildSearchUrl("javascript:alert(1)?q={keyword}", "x")).toBe("");
   });
 });
 
-describe("createArcaLink", () => {
-  it("creates anchor with correct attributes", () => {
-    const link = createArcaLink("아이유");
+const SITE: TargetSite = {
+  name: "구글 검색",
+  label: "구글",
+  url: "https://www.google.com/search?q={keyword}",
+};
+
+describe("createSiteLink", () => {
+  it("creates an anchor showing the short label", () => {
+    const link = createSiteLink(SITE, "아이유")!;
     expect(link.tagName).toBe("A");
-    expect(link.textContent).toBe("왜?");
+    expect(link.textContent).toBe("구글");
+    expect(link.className).toBe(CSS_CLASS_ARCA_LINK);
     expect(link.target).toBe("_blank");
-    expect(link.className).toBe("arca-link");
-    expect(link.href).toContain("arca.live");
+    expect(link.href).toContain("google.com/search?q=");
   });
 
-  it("sets rel to noopener noreferrer for security", () => {
-    const link = createArcaLink("테스트");
+  it("falls back to name when label is absent", () => {
+    const link = createSiteLink(
+      { name: "Foo", url: "https://foo/{keyword}" },
+      "x",
+    )!;
+    expect(link.textContent).toBe("Foo");
+  });
+
+  it("sets rel=noopener noreferrer and a descriptive title", () => {
+    const link = createSiteLink(SITE, "뉴진스")!;
     expect(link.rel).toBe("noopener noreferrer");
-  });
-
-  it("includes keyword in title attribute", () => {
-    const link = createArcaLink("뉴진스");
     expect(link.title).toContain("뉴진스");
+    expect(link.title).toContain("구글 검색");
   });
 
-  it("attached click handler stops propagation so the original anchor doesn't navigate", () => {
-    const link = createArcaLink("테스트");
+  it("returns null for a site whose url lacks {keyword}", () => {
+    expect(createSiteLink({ name: "X", url: "https://x/" }, "k")).toBeNull();
+  });
+
+  it("click handler stops propagation", () => {
+    const link = createSiteLink(SITE, "테스트")!;
     document.body.appendChild(link);
     const ev = new MouseEvent("click", { bubbles: true, cancelable: true });
     const stopProp = vi.spyOn(ev, "stopPropagation");
@@ -68,46 +83,205 @@ describe("createArcaLink", () => {
   });
 });
 
+describe("createLinksContainer", () => {
+  const sites: TargetSite[] = [
+    { name: "아카", label: "아카", url: "https://arca/{keyword}" },
+    { name: "구글", label: "구글", url: "https://g/{keyword}" },
+    { name: "노템플릿", url: "https://no-keyword/" }, // must be skipped
+  ];
+
+  it("creates a container with one link per valid site", () => {
+    const c = createLinksContainer("손흥민", sites);
+    expect(c.className).toBe(CSS_CLASS_LINKS_CONTAINER);
+    const links = c.querySelectorAll(`a.${CSS_CLASS_ARCA_LINK}`);
+    expect(links).toHaveLength(2); // the no-{keyword} site is skipped
+    expect(links[0]!.textContent).toBe("아카");
+    expect(links[1]!.textContent).toBe("구글");
+  });
+
+  it("creates an empty container when given no sites", () => {
+    const c = createLinksContainer("x", []);
+    expect(c.querySelectorAll("a")).toHaveLength(0);
+  });
+});
+
 describe("addNewLink", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
   });
 
-  it("appends link inside parent <li> when present", () => {
-    document.body.innerHTML = '<ul><li><a id="a">target</a></li></ul>';
-    const anchor = document.getElementById("a") as HTMLElement;
-    addNewLink(anchor, "키워드");
-    const li = document.querySelector("li") as HTMLElement;
-    expect(li.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(1);
+  it("appends a links container to the keyword's <li>", () => {
+    document.body.innerHTML = `<ul><li><span class="kw">손흥민</span></li></ul>`;
+    const el = document.querySelector(".kw") as HTMLElement;
+    addNewLink(el, "손흥민");
+    const li = document.querySelector("li")!;
+    expect(li.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`)).toHaveLength(
+      1,
+    );
+    expect(
+      li.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER} a`).length,
+    ).toBeGreaterThanOrEqual(1);
   });
 
-  it("does not add duplicate link when one already exists", () => {
-    document.body.innerHTML = `<ul><li><a id="a">target</a><a class="${CSS_CLASS_ARCA_LINK}">왜?</a></li></ul>`;
-    const anchor = document.getElementById("a") as HTMLElement;
-    addNewLink(anchor, "키워드");
-    const li = document.querySelector("li") as HTMLElement;
-    expect(li.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(1);
+  it("does not add a second container if one already exists (idempotent)", () => {
+    document.body.innerHTML = `<ul><li><span class="kw">날씨</span></li></ul>`;
+    const el = document.querySelector(".kw") as HTMLElement;
+    addNewLink(el, "날씨");
+    addNewLink(el, "날씨");
+    const li = document.querySelector("li")!;
+    expect(li.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`)).toHaveLength(
+      1,
+    );
   });
 
-  it("inserts link as next sibling when no parent <li>", () => {
+  it("inserts container as next sibling when no parent <li>", () => {
     document.body.innerHTML = '<div><span id="s">target</span></div>';
     const span = document.getElementById("s") as HTMLElement;
     addNewLink(span, "키워드");
     expect(
-      span.nextElementSibling?.classList.contains(CSS_CLASS_ARCA_LINK),
+      span.nextElementSibling?.classList.contains(CSS_CLASS_LINKS_CONTAINER),
     ).toBe(true);
   });
 
-  it("does NOT insert when next sibling is already arca-link (no <li>)", () => {
-    document.body.innerHTML = `<div><span id="s">t</span><a class="${CSS_CLASS_ARCA_LINK}">왜?</a></div>`;
+  it("does NOT insert when next sibling is already a links container (no <li>)", () => {
+    document.body.innerHTML = `<div><span id="s">t</span><span class="${CSS_CLASS_LINKS_CONTAINER}"></span></div>`;
     const span = document.getElementById("s") as HTMLElement;
     const beforeCount = document.querySelectorAll(
-      `.${CSS_CLASS_ARCA_LINK}`,
+      `.${CSS_CLASS_LINKS_CONTAINER}`,
     ).length;
     addNewLink(span, "키워드");
-    expect(document.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(
-      beforeCount,
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(beforeCount);
+  });
+});
+
+describe("addArcaLinks", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    // @ts-expect-error minimal chrome mock for storage read
+    globalThis.chrome = {
+      storage: {
+        sync: {
+          get: (_d: unknown, cb: (v: { targetSites: undefined }) => void) =>
+            cb({ targetSites: undefined }),
+        },
+      },
+    };
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("adds a links container per realtime keyword and marks them processed", async () => {
+    document.body.innerHTML = `
+      <ul>
+        <li><a href="/Go?q=손흥민" title="손흥민">손흥민</a></li>
+        <li><a href="/Go?q=비트코인" title="비트코인">비트코인</a></li>
+      </ul>`;
+    await addArcaLinks();
+    const containers = document.querySelectorAll(
+      `.${CSS_CLASS_LINKS_CONTAINER}`,
     );
+    expect(containers.length).toBe(2);
+    document
+      .querySelectorAll('a[href^="/Go?q="]')
+      .forEach((el) =>
+        expect((el as HTMLElement).hasAttribute(DATA_ATTR_PROCESSED)).toBe(
+          true,
+        ),
+      );
+  });
+
+  it("logs warning and returns when no realtime markup is present", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    await addArcaLinks();
+    const flatLog = log.mock.calls.map((c) => c.join(" ")).join(" ");
+    expect(flatLog).toContain("찾을 수 없");
+    log.mockRestore();
+  });
+
+  it("marks processed anchors with the data attribute (idempotent)", async () => {
+    document.body.innerHTML = `
+      <ul>
+        <li><a href="/Go?q=once">once</a></li>
+      </ul>
+    `;
+    await addArcaLinks();
+    await addArcaLinks(); // second pass should be a no-op for marked nodes
+
+    const anchors = document.querySelectorAll('a[href^="/Go?q="]');
+    anchors.forEach((a) => {
+      expect((a as HTMLElement).getAttribute(DATA_ATTR_PROCESSED)).toBe("true");
+    });
+    // No duplicate containers injected on second run.
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(1);
+  });
+
+  it("skips anchors with empty/whitespace text", async () => {
+    document.body.innerHTML = `
+      <ul>
+        <li><a href="/Go?q=blank">    </a></li>
+      </ul>
+    `;
+    await addArcaLinks();
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(0);
+  });
+
+  it("skips anchors whose textContent is purely numeric (rank labels)", async () => {
+    document.body.innerHTML = `
+      <ul>
+        <li><a href="/Go?q=numeric">123</a></li>
+      </ul>
+    `;
+    await addArcaLinks();
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(0);
+  });
+
+  it("uses anchor's title attribute as keyword when present (overrides text)", async () => {
+    document.body.innerHTML = `
+      <ul>
+        <li><a href="/Go?q=foo" title="진짜키워드">foo</a></li>
+      </ul>
+    `;
+    await addArcaLinks();
+    const container = document.querySelector(`.${CSS_CLASS_LINKS_CONTAINER}`);
+    expect(container).not.toBeNull();
+    const firstLink = container!.querySelector("a") as HTMLAnchorElement;
+    expect(firstLink.href).toContain(encodeURIComponent("진짜키워드"));
+  });
+
+  it("falls back to text-based heuristic via heading containing '실시간'", async () => {
+    document.body.innerHTML = `
+      <section>
+        <h2>실시간 검색어</h2>
+        <a>키워드A</a>
+        <a>키워드B</a>
+      </section>
+    `;
+    await addArcaLinks();
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(2);
+  });
+
+  it("falls back to text-based heuristic via heading containing '인기'", async () => {
+    document.body.innerHTML = `
+      <aside>
+        <h3>인기 검색어 TOP</h3>
+        <a>인기키워드</a>
+      </aside>
+    `;
+    await addArcaLinks();
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(1);
   });
 });
 
@@ -127,10 +301,12 @@ describe("updateArcaLink", () => {
       newKeyword: "new",
       element: undefined,
     });
-    expect(document.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(0);
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(0);
   });
 
-  it('adds link for "added" change type', async () => {
+  it('adds container for "added" change type', async () => {
     document.body.innerHTML = '<ul><li><a id="a">target</a></li></ul>';
     const anchor = document.getElementById("a") as HTMLElement;
     await updateArcaLink({
@@ -139,12 +315,14 @@ describe("updateArcaLink", () => {
       newKeyword: "새키워드",
       element: anchor,
     });
-    expect(document.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(1);
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(1);
   });
 
-  it('replaces link for "modified" change type via fade animation', async () => {
+  it('replaces container for "modified" change type via fade animation', async () => {
     vi.useFakeTimers();
-    document.body.innerHTML = `<ul><li><a id="a">target</a><a class="${CSS_CLASS_ARCA_LINK}">왜?</a></li></ul>`;
+    document.body.innerHTML = `<ul><li><a id="a">target</a><span class="${CSS_CLASS_LINKS_CONTAINER}"><a class="${CSS_CLASS_ARCA_LINK}">왜?</a></span></li></ul>`;
     const anchor = document.getElementById("a") as HTMLElement;
 
     const promise = updateArcaLink({
@@ -160,12 +338,13 @@ describe("updateArcaLink", () => {
     await promise;
 
     const li = document.querySelector("li") as HTMLElement;
-    const arcaLinks = li.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`);
-    expect(arcaLinks.length).toBe(1);
-    expect((arcaLinks[0] as HTMLAnchorElement).title).toContain("신규");
+    const containers = li.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`);
+    expect(containers.length).toBe(1);
+    const firstLink = containers[0]!.querySelector("a") as HTMLAnchorElement;
+    expect(decodeURIComponent(firstLink.href)).toContain("신규");
   });
 
-  it('"modified" falls back to addNewLink when no existing arca-link found', async () => {
+  it('"modified" falls back to addNewLink when no existing container found', async () => {
     document.body.innerHTML = '<ul><li><a id="a">target</a></li></ul>';
     const anchor = document.getElementById("a") as HTMLElement;
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -178,13 +357,15 @@ describe("updateArcaLink", () => {
       element: anchor,
     });
 
-    expect(document.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(1);
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(1);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });
 
   it('"removed" change type only logs (does not mutate DOM)', async () => {
-    document.body.innerHTML = `<ul><li><a id="a">t</a><a class="${CSS_CLASS_ARCA_LINK}">왜?</a></li></ul>`;
+    document.body.innerHTML = `<ul><li><a id="a">t</a><span class="${CSS_CLASS_LINKS_CONTAINER}"><a class="${CSS_CLASS_ARCA_LINK}">왜?</a></span></li></ul>`;
     const anchor = document.getElementById("a") as HTMLElement;
     const before = document.body.innerHTML;
 
@@ -211,109 +392,46 @@ describe("updateArcaLink", () => {
     });
 
     expect(warn).toHaveBeenCalled();
-    expect(document.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(0);
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(0);
     warn.mockRestore();
   });
 });
 
-describe("addArcaLinks — DOM scan + injection", () => {
+describe("updateArcaLink (modified)", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
   });
 
-  it("logs warning and returns when no realtime markup is present", async () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => {});
-    await addArcaLinks();
-    // Two log lines: "찾을 수 없습니다" + "개발자 도구..."
-    const flatLog = log.mock.calls.map((c) => c.join(" ")).join(" ");
-    expect(flatLog).toContain("찾을 수 없");
-    log.mockRestore();
-  });
+  it("replaces the container's links with the new keyword", async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = `<ul><li><span class="kw">옛키워드</span></li></ul>`;
+    const el = document.querySelector(".kw") as HTMLElement;
+    addNewLink(el, "옛키워드");
 
-  it("injects arca-link for each /Go?q= anchor in <ul>", async () => {
-    document.body.innerHTML = `
-      <ul>
-        <li><a href="/Go?q=first">first</a></li>
-        <li><a href="/Go?q=second">second</a></li>
-      </ul>
-    `;
-    await addArcaLinks();
-    expect(document.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(2);
-  });
-
-  it("marks processed anchors with the data attribute (idempotent)", async () => {
-    document.body.innerHTML = `
-      <ul>
-        <li><a href="/Go?q=once">once</a></li>
-      </ul>
-    `;
-    await addArcaLinks();
-    await addArcaLinks(); // second pass should be a no-op for marked nodes
-
-    const anchors = document.querySelectorAll('a[href^="/Go?q="]');
-    anchors.forEach((a) => {
-      expect((a as HTMLElement).getAttribute(DATA_ATTR_PROCESSED)).toBe("true");
+    const promise = updateArcaLink({
+      type: "modified",
+      rank: 1,
+      oldKeyword: "옛키워드",
+      newKeyword: "새키워드",
+      element: el,
     });
-    // No duplicate arca-links injected on second run.
-    expect(document.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(1);
-  });
+    await vi.runAllTimersAsync();
+    await promise;
 
-  it("skips anchors with empty/whitespace text", async () => {
-    document.body.innerHTML = `
-      <ul>
-        <li><a href="/Go?q=blank">    </a></li>
-      </ul>
-    `;
-    await addArcaLinks();
-    expect(document.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(0);
-  });
-
-  it("skips anchors whose textContent is purely numeric (rank labels)", async () => {
-    // The script avoids inserting "왜?" links next to plain rank numbers
-    // like "1" or "2" that namu.wiki sometimes renders separately.
-    document.body.innerHTML = `
-      <ul>
-        <li><a href="/Go?q=numeric">123</a></li>
-      </ul>
-    `;
-    await addArcaLinks();
-    expect(document.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(0);
-  });
-
-  it("uses anchor's title attribute as keyword when present (overrides text)", async () => {
-    document.body.innerHTML = `
-      <ul>
-        <li><a href="/Go?q=foo" title="진짜키워드">foo</a></li>
-      </ul>
-    `;
-    await addArcaLinks();
-    const arca = document.querySelector(
-      `.${CSS_CLASS_ARCA_LINK}`,
+    const li = document.querySelector("li")!;
+    expect(li.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`)).toHaveLength(
+      1,
+    );
+    const firstLink = li.querySelector(
+      `.${CSS_CLASS_LINKS_CONTAINER} a`,
     ) as HTMLAnchorElement;
-    expect(arca.href).toContain(encodeURIComponent("진짜키워드"));
+    expect(decodeURIComponent(firstLink.href)).toContain("새키워드");
   });
 
-  it("falls back to text-based heuristic via heading containing '실시간'", async () => {
-    document.body.innerHTML = `
-      <section>
-        <h2>실시간 검색어</h2>
-        <a>키워드A</a>
-        <a>키워드B</a>
-      </section>
-    `;
-    await addArcaLinks();
-    expect(document.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(2);
-  });
-
-  it("falls back to text-based heuristic via heading containing '인기'", async () => {
-    document.body.innerHTML = `
-      <aside>
-        <h3>인기 검색어 TOP</h3>
-        <a>인기키워드</a>
-      </aside>
-    `;
-    await addArcaLinks();
-    expect(document.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(1);
+  afterEach(() => {
+    vi.useRealTimers();
   });
 });
 
@@ -327,14 +445,11 @@ describe("updateExistingLink — element outside <li> (parentNode fallback)", ()
   });
 
   it("uses parentNode.querySelector when element has no <li> ancestor", async () => {
-    // Pin L87 OptionalChaining + L107 OptionalChaining (parentNode fallback)
-    // and L106 BlockStatement (the parentLi-absent branch). Stryker leaves
-    // these no-coverage when every test wraps the anchor in <li>.
     vi.useFakeTimers();
     document.body.innerHTML = `
       <div id="container">
         <a id="target">target</a>
-        <a class="${CSS_CLASS_ARCA_LINK}">왜?</a>
+        <span class="${CSS_CLASS_LINKS_CONTAINER}"><a class="${CSS_CLASS_ARCA_LINK}">왜?</a></span>
       </div>
     `;
     const anchor = document.getElementById("target") as HTMLElement;
@@ -350,25 +465,16 @@ describe("updateExistingLink — element outside <li> (parentNode fallback)", ()
     await promise;
 
     const container = document.getElementById("container") as HTMLElement;
-    const arcaLinks = container.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`);
-    expect(arcaLinks.length).toBe(1);
-    expect((arcaLinks[0] as HTMLAnchorElement).title).toContain("신규아카");
-    // The new link should be inserted via parentNode.insertBefore — i.e.
-    // before the original target's nextSibling (which is the old arca-link
-    // before removal). After the swap, the new link should still be a
-    // direct child of #container (NOT placed under a phantom <li>).
-    expect((arcaLinks[0] as HTMLElement).parentElement?.id).toBe("container");
+    const containers = container.querySelectorAll(
+      `.${CSS_CLASS_LINKS_CONTAINER}`,
+    );
+    expect(containers.length).toBe(1);
+    const firstLink = containers[0]!.querySelector("a") as HTMLAnchorElement;
+    expect(decodeURIComponent(firstLink.href)).toContain("신규아카");
+    expect((containers[0] as HTMLElement).parentElement?.id).toBe("container");
   });
 
   it("addNewLink uses parentLi.appendChild (link goes to end of <li>, after siblings)", async () => {
-    // Pin L62 `if (parentLi && !parentLi.querySelector(...))`. With
-    // ConditionalExpression `→ false`, the branch is skipped → falls to
-    // else-if `parentNode.insertBefore(arcaLink, element.nextSibling)`,
-    // which places the link BEFORE the target's next sibling — not at
-    // the end of <li>. By having a sibling AFTER the target inside <li>,
-    // the two paths diverge:
-    //   appendChild: arcaLink is the LAST child of <li>.
-    //   insertBefore: arcaLink sits between target and the sibling.
     document.body.innerHTML =
       '<ul><li><a id="a">target</a><span id="after">after</span></li></ul>';
     const anchor = document.getElementById("a") as HTMLElement;
@@ -379,12 +485,12 @@ describe("updateExistingLink — element outside <li> (parentNode fallback)", ()
       element: anchor,
     });
     const li = document.querySelector("li") as HTMLElement;
-    expect(li.lastElementChild?.classList.contains(CSS_CLASS_ARCA_LINK)).toBe(
-      true,
-    );
+    expect(
+      li.lastElementChild?.classList.contains(CSS_CLASS_LINKS_CONTAINER),
+    ).toBe(true);
   });
 
-  it("warns and falls back to addNewLink when element has no <li> AND no existing arca-link sibling", async () => {
+  it("warns and falls back to addNewLink when element has no <li> AND no existing container sibling", async () => {
     document.body.innerHTML = `
       <div id="container">
         <a id="target">target</a>
@@ -401,7 +507,9 @@ describe("updateExistingLink — element outside <li> (parentNode fallback)", ()
       element: anchor,
     });
 
-    expect(document.querySelectorAll(`.${CSS_CLASS_ARCA_LINK}`).length).toBe(1);
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(1);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });

@@ -29,6 +29,16 @@ describe("observer.ts — observeRealtimeUpdates", () => {
     observerInstances = [];
     detectKeywordChangesMock.mockReset();
 
+    // @ts-expect-error minimal chrome mock for storage read (needed by addArcaLinks → refreshActiveSites)
+    globalThis.chrome = {
+      storage: {
+        sync: {
+          get: (_d: unknown, cb: (v: { targetSites: undefined }) => void) =>
+            cb({ targetSites: undefined }),
+        },
+      },
+    };
+
     (globalThis as unknown as { MutationObserver: unknown }).MutationObserver =
       class MockObserver {
         observe = vi.fn();
@@ -69,7 +79,7 @@ describe("observer.ts — observeRealtimeUpdates", () => {
     expect(opts.attributeFilter).toContain("href");
   });
 
-  it("processes pre-existing keywords after attach (closes initial-render race)", () => {
+  it("processes pre-existing keywords after attach (closes initial-render race)", async () => {
     document.body.innerHTML = `
       <ul>
         <li><a href="/Go?q=북토끼">북토끼</a></li>
@@ -78,10 +88,11 @@ describe("observer.ts — observeRealtimeUpdates", () => {
     `;
 
     observeRealtimeUpdates();
-    vi.advanceTimersByTime(200);
+    await vi.runAllTimersAsync();
 
-    const arcaLinks = document.querySelectorAll("a.arca-link");
-    expect(arcaLinks.length).toBe(2);
+    // Now renders one container per keyword (each with 5 site links)
+    const containers = document.querySelectorAll("span.arca-links");
+    expect(containers.length).toBe(2);
   });
 
   it("retries up to 5 times when container is missing, then gives up", () => {
@@ -149,14 +160,14 @@ describe("observer.ts — observeRealtimeUpdates", () => {
     ).not.toThrow();
   });
 
-  it("triggers addArcaLinks when childList mutation adds a /Go?q= anchor directly", () => {
+  it("triggers addArcaLinks when childList mutation adds a /Go?q= anchor directly", async () => {
     document.body.innerHTML = `
       <ul>
         <li><a href="/Go?q=existing">existing</a></li>
       </ul>
     `;
     observeRealtimeUpdates();
-    vi.advanceTimersByTime(200); // initial post-attach pass
+    await vi.runAllTimersAsync(); // initial post-attach pass
     const initialCount = document.querySelectorAll("a.arca-link").length;
 
     const obs = observerInstances[0]!;
@@ -182,14 +193,14 @@ describe("observer.ts — observeRealtimeUpdates", () => {
       ],
       obs as unknown as MutationObserver,
     );
-    vi.advanceTimersByTime(200);
+    await vi.runAllTimersAsync();
 
     expect(document.querySelectorAll("a.arca-link").length).toBeGreaterThan(
       initialCount,
     );
   });
 
-  it("triggers addArcaLinks when added node IS the /Go?q= anchor itself (not nested)", () => {
+  it("triggers addArcaLinks when added node IS the /Go?q= anchor itself (not nested)", async () => {
     // Pin observer.ts:79-83 — the branch that checks
     // `element.tagName === "A" && (...)?.getAttribute("href")?.startsWith("/Go?q=")`.
     // Existing childList tests add wrapper elements (<li>, <div>) which
@@ -204,7 +215,7 @@ describe("observer.ts — observeRealtimeUpdates", () => {
       </ul>
     `;
     observeRealtimeUpdates();
-    vi.advanceTimersByTime(200);
+    await vi.runAllTimersAsync();
     const baseline = document.querySelectorAll("a.arca-link").length;
 
     const obs = observerInstances[0]!;
@@ -231,21 +242,21 @@ describe("observer.ts — observeRealtimeUpdates", () => {
       ],
       obs as unknown as MutationObserver,
     );
-    vi.advanceTimersByTime(200);
+    await vi.runAllTimersAsync();
 
     expect(document.querySelectorAll("a.arca-link").length).toBeGreaterThan(
       baseline,
     );
   });
 
-  it("triggers addArcaLinks when childList mutation adds a node CONTAINING a /Go?q= anchor (nested)", () => {
+  it("triggers addArcaLinks when childList mutation adds a node CONTAINING a /Go?q= anchor (nested)", async () => {
     document.body.innerHTML = `
       <ul>
         <li><a href="/Go?q=existing">existing</a></li>
       </ul>
     `;
     observeRealtimeUpdates();
-    vi.advanceTimersByTime(200);
+    await vi.runAllTimersAsync();
     const baseline = document.querySelectorAll("a.arca-link").length;
 
     const obs = observerInstances[0]!;
@@ -270,7 +281,7 @@ describe("observer.ts — observeRealtimeUpdates", () => {
       ],
       obs as unknown as MutationObserver,
     );
-    vi.advanceTimersByTime(200);
+    await vi.runAllTimersAsync();
 
     expect(document.querySelectorAll("a.arca-link").length).toBeGreaterThan(
       baseline,
