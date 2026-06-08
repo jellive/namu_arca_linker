@@ -63,8 +63,15 @@ function createSiteRow(site: TargetSite, index: number): HTMLElement {
   urlInput.value = site.url;
   urlInput.placeholder = "URL ({keyword} 위치에 검색어가 삽입됩니다)";
 
+  const labelInput = document.createElement("input");
+  labelInput.className = "site-label";
+  labelInput.type = "text";
+  labelInput.value = site.label ?? "";
+  labelInput.placeholder = "표시 라벨 (예: 구글)";
+
   info.appendChild(nameInput);
   info.appendChild(urlInput);
+  info.appendChild(labelInput);
 
   const removeBtn = document.createElement("button");
   removeBtn.className = "remove-btn";
@@ -98,8 +105,11 @@ function collectSites(): TargetSite[] {
     const url = (
       row.querySelector(".site-url") as HTMLInputElement
     ).value.trim();
+    const label = (
+      row.querySelector(".site-label") as HTMLInputElement
+    )?.value.trim();
     if (name && url) {
-      sites.push({ name, url });
+      sites.push(label ? { name, url, label } : { name, url });
     }
   });
 

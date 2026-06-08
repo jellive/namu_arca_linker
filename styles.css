@@ -87,3 +87,25 @@
     font-size: 10px;
   }
 }
+
+/* 멀티사이트 링크 컨테이너 — 좁은 위젯에서 다음 줄로 wrap */
+.arca-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* 컨테이너 안에서는 각 링크의 좌측 마진 제거 (gap이 간격을 담당) */
+.arca-links .arca-link {
+  margin-left: 0;
+}
+
+@media (max-width: 768px) {
+  .arca-links {
+    gap: 3px;
+    margin-left: 4px;
+  }
+}
