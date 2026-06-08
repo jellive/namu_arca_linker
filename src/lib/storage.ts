@@ -3,6 +3,7 @@ import { LOG_PREFIX } from "../constants/config";
 export interface TargetSite {
   name: string;
   url: string;
+  label?: string; // short inline display label; falls back to name
 }
 
 export interface StorageState {
