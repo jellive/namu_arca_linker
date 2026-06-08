@@ -54,5 +54,8 @@
   },
   "overrides": {
     "fast-uri": ">=3.1.2"
+  },
+  "dependencies": {
+    "@sentry/browser": "^10.56.0"
   }
 }
