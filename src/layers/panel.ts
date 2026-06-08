@@ -3,8 +3,15 @@ import {
   CSS_CLASS_PANEL_TOGGLE,
   CSS_CLASS_PANEL_ROW,
   CSS_CLASS_PANEL_BADGE,
+  STORAGE_KEY_HUB_COLLAPSED,
 } from "../constants/config";
-import { createLinksContainer } from "./manipulation";
+import {
+  createLinksContainer,
+  activeSites,
+  refreshActiveSites,
+} from "./manipulation";
+import { extractCurrentKeywords } from "./discovery";
+import { computeTrends } from "./trends";
 import type { TrendBadge } from "./trends";
 import type { KeywordState } from "../types/common";
 import type { TargetSite } from "../lib/storage";
@@ -80,4 +87,58 @@ export function renderRows(
     row.appendChild(createLinksContainer(keyword, sites));
     body.appendChild(row);
   }
+}
+
+let mounted = false;
+let parts: PanelParts | null = null;
+let prevKeywords: KeywordState = new Map();
+
+export function __resetPanelForTest(): void {
+  mounted = false;
+  parts = null;
+  prevKeywords = new Map();
+}
+
+function getCollapsed(): Promise<boolean> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get({ [STORAGE_KEY_HUB_COLLAPSED]: false }, (v) =>
+      resolve(Boolean(v[STORAGE_KEY_HUB_COLLAPSED])),
+    );
+  });
+}
+
+function setCollapsed(collapsed: boolean): void {
+  chrome.storage.local.set({ [STORAGE_KEY_HUB_COLLAPSED]: collapsed });
+}
+
+function applyCollapsed(collapsed: boolean): void {
+  if (!parts) return;
+  parts.panel.style.display = collapsed ? "none" : "";
+}
+
+export async function mountPanel(): Promise<void> {
+  if (mounted || document.querySelector(`.${CSS_CLASS_PANEL}`)) {
+    mounted = true;
+    return;
+  }
+  parts = buildPanel();
+  parts.toggle.addEventListener("click", () => {
+    const nowHidden = parts!.panel.style.display !== "none";
+    applyCollapsed(nowHidden);
+    setCollapsed(nowHidden);
+  });
+  document.body.appendChild(parts.panel);
+  document.body.appendChild(parts.toggle);
+  mounted = true;
+  applyCollapsed(await getCollapsed());
+  await updatePanel();
+}
+
+export async function updatePanel(): Promise<void> {
+  if (!parts) return;
+  await refreshActiveSites();
+  const current = extractCurrentKeywords();
+  const trends = computeTrends(current, prevKeywords);
+  renderRows(parts.body, current, trends, activeSites);
+  prevKeywords = current;
 }
