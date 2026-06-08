@@ -1,5 +1,3 @@
-import { initSentry } from "./sentry";
-initSentry();
 import { DEFAULT_TARGET_SITES } from "./constants/sites";
 
 interface StorageData {
