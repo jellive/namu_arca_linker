@@ -1,7 +1,6 @@
 import { LOG_PREFIX, NAV_DELAY_MS } from "../constants/config";
 import { addArcaLinks } from "../layers/manipulation";
 import { onRealtimeChange, observeRealtimeUpdates } from "../layers/observer";
-import { mountPanel, updatePanel } from "../layers/panel";
 import { getStorageState } from "./storage";
 
 /**
@@ -31,10 +30,8 @@ export async function init(): Promise<void> {
     await addArcaLinks();
   }
   observeRealtimeUpdates();
-  await mountPanel();
   onRealtimeChange(() => {
     if (!hideInline) void addArcaLinks();
-    void updatePanel();
   });
 
   if ("navigation" in window) {
@@ -42,7 +39,6 @@ export async function init(): Promise<void> {
     nav.addEventListener("navigate", () => {
       setTimeout(() => {
         if (!hideInline) void addArcaLinks();
-        void updatePanel();
       }, NAV_DELAY_MS);
     });
   }

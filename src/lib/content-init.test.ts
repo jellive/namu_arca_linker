@@ -6,8 +6,6 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 const addArcaLinks = vi.fn().mockResolvedValue(undefined);
 const observeRealtimeUpdates = vi.fn();
 const onRealtimeChange = vi.fn();
-const mountPanel = vi.fn().mockResolvedValue(undefined);
-const updatePanel = vi.fn().mockResolvedValue(undefined);
 const getStorageState = vi.fn();
 
 vi.mock("../layers/manipulation", () => ({
@@ -17,10 +15,6 @@ vi.mock("../layers/observer", () => ({
   observeRealtimeUpdates: (...args: unknown[]) =>
     observeRealtimeUpdates(...args),
   onRealtimeChange: (...args: unknown[]) => onRealtimeChange(...args),
-}));
-vi.mock("../layers/panel", () => ({
-  mountPanel: (...args: unknown[]) => mountPanel(...args),
-  updatePanel: (...args: unknown[]) => updatePanel(...args),
 }));
 vi.mock("./storage", () => ({
   getStorageState: () => getStorageState(),
@@ -34,8 +28,6 @@ beforeEach(() => {
   addArcaLinks.mockClear();
   observeRealtimeUpdates.mockClear();
   onRealtimeChange.mockClear();
-  mountPanel.mockClear();
-  updatePanel.mockClear();
   getStorageState.mockReset();
   onChangedAdd.mockClear();
   globalThis.chrome = {
@@ -69,6 +61,13 @@ describe("init — enabled gate", () => {
     await init();
     expect(addArcaLinks).toHaveBeenCalledTimes(1);
     expect(observeRealtimeUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not import or call any panel code (panel removed)", async () => {
+    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    await init();
+    // addArcaLinks is the only DOM-mutating call now
+    expect(addArcaLinks).toHaveBeenCalledTimes(1);
   });
 
   it("calls addArcaLinks BEFORE observeRealtimeUpdates (initial paint then watch)", async () => {
