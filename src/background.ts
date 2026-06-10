@@ -21,6 +21,39 @@ export async function handleMatchThreads(
   return { matches };
 }
 
+// arca app API gates on the official-app User-Agent. fetch() cannot set
+// User-Agent from a service worker, so rewrite it via declarativeNetRequest.
+const ARCA_UA = "net.umanle.arca.android.playstore/0.9.83";
+function registerArcaUaRule(): void {
+  chrome.declarativeNetRequest.updateSessionRules({
+    removeRuleIds: [1],
+    addRules: [
+      {
+        id: 1,
+        priority: 1,
+        action: {
+          type: "modifyHeaders" as chrome.declarativeNetRequest.RuleActionType,
+          requestHeaders: [
+            {
+              header: "user-agent",
+              operation: "set" as chrome.declarativeNetRequest.HeaderOperation,
+              value: ARCA_UA,
+            },
+          ],
+        },
+        condition: {
+          urlFilter: "||arca.live/api/app/list/channel/namuhotnow",
+          resourceTypes: [
+            "xmlhttprequest" as chrome.declarativeNetRequest.ResourceType,
+          ],
+        },
+      },
+    ],
+  });
+}
+chrome.runtime.onInstalled.addListener(registerArcaUaRule);
+chrome.runtime.onStartup.addListener(registerArcaUaRule);
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (
     msg &&

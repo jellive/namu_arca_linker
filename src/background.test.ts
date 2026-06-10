@@ -7,12 +7,19 @@ vi.mock("./lib/arca-api", () => ({
   matchThread: (...a: unknown[]) => matchThread(...a),
 }));
 
-// chrome.runtime.onMessage must exist at import time.
+// chrome APIs must exist at import time.
 // vi.hoisted runs before module imports, so chrome is defined when background.ts loads.
 const { addListener } = vi.hoisted(() => {
   const addListener = vi.fn();
   globalThis.chrome = {
-    runtime: { onMessage: { addListener } },
+    runtime: {
+      onMessage: { addListener },
+      onInstalled: { addListener: vi.fn() },
+      onStartup: { addListener: vi.fn() },
+    },
+    declarativeNetRequest: {
+      updateSessionRules: vi.fn(),
+    },
   } as unknown as typeof chrome;
   return { addListener };
 });
