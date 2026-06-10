@@ -16,3 +16,6 @@ export const CSS_CLASS_PANEL_ROW = "arca-hub-row";
 export const CSS_CLASS_PANEL_BADGE = "arca-hub-badge";
 export const STORAGE_KEY_HUB_COLLAPSED = "hubCollapsed";
 export const STORAGE_KEY_HIDE_INLINE = "hideInlineLinks";
+
+export const DATA_ATTR_THREAD = "data-arca-thread";
+export const ARCA_SEARCH_TEMPLATE = `${ARCA_BASE_URL}?target=all&keyword={keyword}`;

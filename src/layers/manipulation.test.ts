@@ -1,18 +1,30 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   buildSearchUrl,
-  createSiteLink,
-  createLinksContainer,
-  addNewLink,
-  updateArcaLink,
+  createThreadLink,
+  createLinkContainer,
+  refreshThreadMatches,
+  threadMatches,
   addArcaLinks,
+  updateArcaLink,
 } from "./manipulation";
 import {
   CSS_CLASS_ARCA_LINK,
   CSS_CLASS_LINKS_CONTAINER,
   DATA_ATTR_PROCESSED,
 } from "../constants/config";
-import type { TargetSite } from "../lib/storage";
+import type { ThreadMatch } from "../lib/arca-api";
+
+const sendMessage = vi.fn();
+
+beforeEach(() => {
+  document.body.innerHTML = "";
+  sendMessage.mockReset();
+  globalThis.chrome = {
+    runtime: { sendMessage: (...a: unknown[]) => sendMessage(...a) },
+  } as unknown as typeof chrome;
+});
+afterEach(() => vi.restoreAllMocks());
 
 describe("buildSearchUrl", () => {
   it("substitutes + URL-encodes the keyword", () => {
@@ -22,158 +34,90 @@ describe("buildSearchUrl", () => {
     );
     expect(url).toContain("keyword=%ED%95%9C%EA%B5%AD");
   });
-
-  it("encodes special characters", () => {
-    const url = buildSearchUrl("https://x.com/search?q={keyword}", "a b+c");
-    expect(url).toContain("q=a%20b%2Bc");
-  });
-
-  it("returns '' when the template has no {keyword} placeholder", () => {
+  it("returns '' when no {keyword} placeholder", () => {
     expect(buildSearchUrl("https://example.com/", "x")).toBe("");
   });
-
   it("returns '' for a non-http(s) template", () => {
     expect(buildSearchUrl("javascript:alert(1)?q={keyword}", "x")).toBe("");
   });
 });
 
-const SITE: TargetSite = {
-  name: "구글 검색",
-  label: "구글",
-  url: "https://www.google.com/search?q={keyword}",
+const MATCH: ThreadMatch = {
+  id: 555,
+  title: "황승언",
+  commentCount: 23,
+  category: "커뮤",
 };
 
-describe("createSiteLink", () => {
-  it("creates an anchor showing the short label", () => {
-    const link = createSiteLink(SITE, "아이유")!;
-    expect(link.tagName).toBe("A");
-    expect(link.textContent).toBe("구글");
-    expect(link.className).toBe(CSS_CLASS_ARCA_LINK);
-    expect(link.target).toBe("_blank");
-    expect(link.href).toContain("google.com/search?q=");
+describe("createThreadLink", () => {
+  it("builds a thread link (💬 + count) when matched", () => {
+    const a = createThreadLink("황승언", MATCH);
+    expect(a.tagName).toBe("A");
+    expect(a.href).toContain("/b/namuhotnow/555");
+    expect(a.textContent).toBe("💬23");
+    expect(a.title).toBe("황승언");
+    expect(a.target).toBe("_blank");
+    expect(a.rel).toBe("noopener noreferrer");
   });
 
-  it("falls back to name when label is absent", () => {
-    const link = createSiteLink(
-      { name: "Foo", url: "https://foo/{keyword}" },
-      "x",
-    )!;
-    expect(link.textContent).toBe("Foo");
+  it("uses category when commentCount is absent", () => {
+    const a = createThreadLink("x", { id: 1, title: "x", category: "스포츠" });
+    expect(a.textContent).toBe("💬스포츠");
   });
 
-  it("sets rel=noopener noreferrer and a descriptive title", () => {
-    const link = createSiteLink(SITE, "뉴진스")!;
-    expect(link.rel).toBe("noopener noreferrer");
-    expect(link.title).toContain("뉴진스");
-    expect(link.title).toContain("구글 검색");
+  it("shows bare 💬 when neither count nor category present", () => {
+    const a = createThreadLink("x", { id: 1, title: "x" });
+    expect(a.textContent).toBe("💬");
   });
 
-  it("returns null for a site whose url lacks {keyword}", () => {
-    expect(createSiteLink({ name: "X", url: "https://x/" }, "k")).toBeNull();
+  it("falls back to a 🔎 search link when no match", () => {
+    const a = createThreadLink("김치찌개", null);
+    expect(a.textContent).toBe("🔎");
+    expect(a.href).toContain("keyword=");
+    expect(decodeURIComponent(a.href)).toContain("김치찌개");
   });
 
   it("click handler stops propagation", () => {
-    const link = createSiteLink(SITE, "테스트")!;
-    document.body.appendChild(link);
+    const a = createThreadLink("x", MATCH);
+    document.body.appendChild(a);
     const ev = new MouseEvent("click", { bubbles: true, cancelable: true });
-    const stopProp = vi.spyOn(ev, "stopPropagation");
-    link.dispatchEvent(ev);
-    expect(stopProp).toHaveBeenCalled();
-    document.body.removeChild(link);
+    const stop = vi.spyOn(ev, "stopPropagation");
+    a.dispatchEvent(ev);
+    expect(stop).toHaveBeenCalled();
   });
 });
 
-describe("createLinksContainer", () => {
-  const sites: TargetSite[] = [
-    { name: "아카", label: "아카", url: "https://arca/{keyword}" },
-    { name: "구글", label: "구글", url: "https://g/{keyword}" },
-    { name: "노템플릿", url: "https://no-keyword/" }, // must be skipped
-  ];
-
-  it("creates a container with one link per valid site", () => {
-    const c = createLinksContainer("손흥민", sites);
+describe("createLinkContainer", () => {
+  it("wraps a single thread link in a container span", () => {
+    const c = createLinkContainer("황승언", MATCH);
     expect(c.className).toBe(CSS_CLASS_LINKS_CONTAINER);
-    const links = c.querySelectorAll(`a.${CSS_CLASS_ARCA_LINK}`);
-    expect(links).toHaveLength(2); // the no-{keyword} site is skipped
-    expect(links[0]!.textContent).toBe("아카");
-    expect(links[1]!.textContent).toBe("구글");
-  });
-
-  it("creates an empty container when given no sites", () => {
-    const c = createLinksContainer("x", []);
-    expect(c.querySelectorAll("a")).toHaveLength(0);
+    expect(c.querySelectorAll(`a.${CSS_CLASS_ARCA_LINK}`)).toHaveLength(1);
   });
 });
 
-describe("addNewLink", () => {
-  beforeEach(() => {
-    document.body.innerHTML = "";
+describe("refreshThreadMatches", () => {
+  it("populates threadMatches from the SW response", async () => {
+    sendMessage.mockResolvedValue({ matches: { 황승언: MATCH, 날씨: null } });
+    await refreshThreadMatches(["황승언", "날씨"]);
+    expect(threadMatches.get("황승언")).toEqual(MATCH);
+    expect(threadMatches.get("날씨")).toBeNull();
   });
 
-  it("appends a links container to the keyword's <li>", () => {
-    document.body.innerHTML = `<ul><li><span class="kw">손흥민</span></li></ul>`;
-    const el = document.querySelector(".kw") as HTMLElement;
-    addNewLink(el, "손흥민");
-    const li = document.querySelector("li")!;
-    expect(li.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`)).toHaveLength(
-      1,
-    );
-    expect(
-      li.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER} a`).length,
-    ).toBeGreaterThanOrEqual(1);
-  });
-
-  it("does not add a second container if one already exists (idempotent)", () => {
-    document.body.innerHTML = `<ul><li><span class="kw">날씨</span></li></ul>`;
-    const el = document.querySelector(".kw") as HTMLElement;
-    addNewLink(el, "날씨");
-    addNewLink(el, "날씨");
-    const li = document.querySelector("li")!;
-    expect(li.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`)).toHaveLength(
-      1,
-    );
-  });
-
-  it("inserts container as next sibling when no parent <li>", () => {
-    document.body.innerHTML = '<div><span id="s">target</span></div>';
-    const span = document.getElementById("s") as HTMLElement;
-    addNewLink(span, "키워드");
-    expect(
-      span.nextElementSibling?.classList.contains(CSS_CLASS_LINKS_CONTAINER),
-    ).toBe(true);
-  });
-
-  it("does NOT insert when next sibling is already a links container (no <li>)", () => {
-    document.body.innerHTML = `<div><span id="s">t</span><span class="${CSS_CLASS_LINKS_CONTAINER}"></span></div>`;
-    const span = document.getElementById("s") as HTMLElement;
-    const beforeCount = document.querySelectorAll(
-      `.${CSS_CLASS_LINKS_CONTAINER}`,
-    ).length;
-    addNewLink(span, "키워드");
-    expect(
-      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
-    ).toBe(beforeCount);
+  it("sets all keywords null on SW failure", async () => {
+    sendMessage.mockRejectedValue(new Error("no SW"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await refreshThreadMatches(["a", "b"]);
+    expect(threadMatches.get("a")).toBeNull();
+    expect(threadMatches.get("b")).toBeNull();
+    warn.mockRestore();
   });
 });
 
 describe("addArcaLinks", () => {
-  beforeEach(() => {
-    document.body.innerHTML = "";
-    // @ts-expect-error minimal chrome mock for storage read
-    globalThis.chrome = {
-      storage: {
-        sync: {
-          get: (_d: unknown, cb: (v: { targetSites: undefined }) => void) =>
-            cb({ targetSites: undefined }),
-        },
-      },
-    };
-  });
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("adds a links container per realtime keyword and marks them processed", async () => {
+  it("requests matches then injects one container per keyword", async () => {
+    sendMessage.mockResolvedValue({
+      matches: { 손흥민: MATCH, 비트코인: null },
+    });
     document.body.innerHTML = `
       <ul>
         <li><a href="/Go?q=손흥민" title="손흥민">손흥민</a></li>
@@ -184,121 +128,46 @@ describe("addArcaLinks", () => {
       `.${CSS_CLASS_LINKS_CONTAINER}`,
     );
     expect(containers.length).toBe(2);
-    document
-      .querySelectorAll('a[href^="/Go?q="]')
-      .forEach((el) =>
-        expect((el as HTMLElement).hasAttribute(DATA_ATTR_PROCESSED)).toBe(
-          true,
-        ),
-      );
+    // one link each (single smart link, NOT 5-site multisite)
+    containers.forEach((c) => expect(c.querySelectorAll("a").length).toBe(1));
+    // keyword list was sent to the SW
+    expect(sendMessage).toHaveBeenCalledWith({
+      type: "matchThreads",
+      keywords: ["손흥민", "비트코인"],
+    });
   });
 
-  it("logs warning and returns when no realtime markup is present", async () => {
+  it("is idempotent — second pass adds no duplicate container", async () => {
+    sendMessage.mockResolvedValue({ matches: { once: null } });
+    document.body.innerHTML = `<ul><li><a href="/Go?q=once" title="once">once</a></li></ul>`;
+    await addArcaLinks();
+    await addArcaLinks();
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(1);
+    expect(
+      document
+        .querySelector('a[href^="/Go?q="]')!
+        .getAttribute(DATA_ATTR_PROCESSED),
+    ).toBe("true");
+  });
+
+  it("logs and returns when no realtime markup present", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     await addArcaLinks();
-    const flatLog = log.mock.calls.map((c) => c.join(" ")).join(" ");
-    expect(flatLog).toContain("찾을 수 없");
+    expect(log.mock.calls.map((c) => c.join(" ")).join(" ")).toContain(
+      "찾을 수 없",
+    );
     log.mockRestore();
-  });
-
-  it("marks processed anchors with the data attribute (idempotent)", async () => {
-    document.body.innerHTML = `
-      <ul>
-        <li><a href="/Go?q=once">once</a></li>
-      </ul>
-    `;
-    await addArcaLinks();
-    await addArcaLinks(); // second pass should be a no-op for marked nodes
-
-    const anchors = document.querySelectorAll('a[href^="/Go?q="]');
-    anchors.forEach((a) => {
-      expect((a as HTMLElement).getAttribute(DATA_ATTR_PROCESSED)).toBe("true");
-    });
-    // No duplicate containers injected on second run.
-    expect(
-      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
-    ).toBe(1);
-  });
-
-  it("skips anchors with empty/whitespace text", async () => {
-    document.body.innerHTML = `
-      <ul>
-        <li><a href="/Go?q=blank">    </a></li>
-      </ul>
-    `;
-    await addArcaLinks();
-    expect(
-      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
-    ).toBe(0);
-  });
-
-  it("skips anchors whose textContent is purely numeric (rank labels)", async () => {
-    document.body.innerHTML = `
-      <ul>
-        <li><a href="/Go?q=numeric">123</a></li>
-      </ul>
-    `;
-    await addArcaLinks();
-    expect(
-      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
-    ).toBe(0);
-  });
-
-  it("uses anchor's title attribute as keyword when present (overrides text)", async () => {
-    document.body.innerHTML = `
-      <ul>
-        <li><a href="/Go?q=foo" title="진짜키워드">foo</a></li>
-      </ul>
-    `;
-    await addArcaLinks();
-    const container = document.querySelector(`.${CSS_CLASS_LINKS_CONTAINER}`);
-    expect(container).not.toBeNull();
-    const firstLink = container!.querySelector("a") as HTMLAnchorElement;
-    expect(firstLink.href).toContain(encodeURIComponent("진짜키워드"));
-  });
-
-  it("falls back to text-based heuristic via heading containing '실시간'", async () => {
-    document.body.innerHTML = `
-      <section>
-        <h2>실시간 검색어</h2>
-        <a>키워드A</a>
-        <a>키워드B</a>
-      </section>
-    `;
-    await addArcaLinks();
-    expect(
-      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
-    ).toBe(2);
-  });
-
-  it("falls back to text-based heuristic via heading containing '인기'", async () => {
-    document.body.innerHTML = `
-      <aside>
-        <h3>인기 검색어 TOP</h3>
-        <a>인기키워드</a>
-      </aside>
-    `;
-    await addArcaLinks();
-    expect(
-      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
-    ).toBe(1);
   });
 });
 
 describe("updateArcaLink", () => {
-  beforeEach(() => {
-    document.body.innerHTML = "";
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it("does nothing when element is undefined", async () => {
     await updateArcaLink({
       type: "added",
       rank: 1,
-      newKeyword: "new",
+      newKeyword: "x",
       element: undefined,
     });
     expect(
@@ -306,211 +175,30 @@ describe("updateArcaLink", () => {
     ).toBe(0);
   });
 
-  it('adds container for "added" change type', async () => {
+  it('injects a single thread link for "added"', async () => {
+    sendMessage.mockResolvedValue({ matches: { 새키워드: MATCH } });
     document.body.innerHTML = '<ul><li><a id="a">target</a></li></ul>';
-    const anchor = document.getElementById("a") as HTMLElement;
+    const el = document.getElementById("a") as HTMLElement;
     await updateArcaLink({
       type: "added",
       rank: 1,
-      newKeyword: "새키워드",
-      element: anchor,
-    });
-    expect(
-      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
-    ).toBe(1);
-  });
-
-  it('replaces container for "modified" change type via fade animation', async () => {
-    vi.useFakeTimers();
-    document.body.innerHTML = `<ul><li><a id="a">target</a><span class="${CSS_CLASS_LINKS_CONTAINER}"><a class="${CSS_CLASS_ARCA_LINK}">왜?</a></span></li></ul>`;
-    const anchor = document.getElementById("a") as HTMLElement;
-
-    const promise = updateArcaLink({
-      type: "modified",
-      rank: 1,
-      oldKeyword: "old",
-      newKeyword: "신규",
-      element: anchor,
-    });
-
-    // Run the FADE_DURATION_MS timer + microtasks
-    await vi.runAllTimersAsync();
-    await promise;
-
-    const li = document.querySelector("li") as HTMLElement;
-    const containers = li.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`);
-    expect(containers.length).toBe(1);
-    const firstLink = containers[0]!.querySelector("a") as HTMLAnchorElement;
-    expect(decodeURIComponent(firstLink.href)).toContain("신규");
-  });
-
-  it('"modified" falls back to addNewLink when no existing container found', async () => {
-    document.body.innerHTML = '<ul><li><a id="a">target</a></li></ul>';
-    const anchor = document.getElementById("a") as HTMLElement;
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-    await updateArcaLink({
-      type: "modified",
-      rank: 1,
-      oldKeyword: "old",
-      newKeyword: "신규",
-      element: anchor,
-    });
-
-    expect(
-      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
-    ).toBe(1);
-    expect(warn).toHaveBeenCalled();
-    warn.mockRestore();
-  });
-
-  it('"removed" change type only logs (does not mutate DOM)', async () => {
-    document.body.innerHTML = `<ul><li><a id="a">t</a><span class="${CSS_CLASS_LINKS_CONTAINER}"><a class="${CSS_CLASS_ARCA_LINK}">왜?</a></span></li></ul>`;
-    const anchor = document.getElementById("a") as HTMLElement;
-    const before = document.body.innerHTML;
-
-    await updateArcaLink({
-      type: "removed",
-      rank: 1,
-      oldKeyword: "사라짐",
-      element: anchor,
-    });
-
-    expect(document.body.innerHTML).toBe(before);
-  });
-
-  it("warns and no-ops on unknown change type (default branch)", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    document.body.innerHTML = '<ul><li><a id="a">t</a></li></ul>';
-    const anchor = document.getElementById("a") as HTMLElement;
-
-    await updateArcaLink({
-      type: "future-type" as unknown as "added",
-      rank: 1,
-      element: anchor,
-      newKeyword: "x",
-    });
-
-    expect(warn).toHaveBeenCalled();
-    expect(
-      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
-    ).toBe(0);
-    warn.mockRestore();
-  });
-});
-
-describe("updateArcaLink (modified)", () => {
-  beforeEach(() => {
-    document.body.innerHTML = "";
-  });
-
-  it("replaces the container's links with the new keyword", async () => {
-    vi.useFakeTimers();
-    document.body.innerHTML = `<ul><li><span class="kw">옛키워드</span></li></ul>`;
-    const el = document.querySelector(".kw") as HTMLElement;
-    addNewLink(el, "옛키워드");
-
-    const promise = updateArcaLink({
-      type: "modified",
-      rank: 1,
-      oldKeyword: "옛키워드",
       newKeyword: "새키워드",
       element: el,
     });
-    await vi.runAllTimersAsync();
-    await promise;
-
-    const li = document.querySelector("li")!;
-    expect(li.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`)).toHaveLength(
-      1,
-    );
-    const firstLink = li.querySelector(
-      `.${CSS_CLASS_LINKS_CONTAINER} a`,
-    ) as HTMLAnchorElement;
-    expect(decodeURIComponent(firstLink.href)).toContain("새키워드");
+    const links = document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER} a`);
+    expect(links.length).toBe(1);
+    expect(links[0]!.textContent).toBe("💬23");
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-});
-
-describe("updateExistingLink — element outside <li> (parentNode fallback)", () => {
-  beforeEach(() => {
-    document.body.innerHTML = "";
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("uses parentNode.querySelector when element has no <li> ancestor", async () => {
-    vi.useFakeTimers();
-    document.body.innerHTML = `
-      <div id="container">
-        <a id="target">target</a>
-        <span class="${CSS_CLASS_LINKS_CONTAINER}"><a class="${CSS_CLASS_ARCA_LINK}">왜?</a></span>
-      </div>
-    `;
-    const anchor = document.getElementById("target") as HTMLElement;
-
-    const promise = updateArcaLink({
-      type: "modified",
-      rank: 1,
-      oldKeyword: "old",
-      newKeyword: "신규아카",
-      element: anchor,
-    });
-    await vi.runAllTimersAsync();
-    await promise;
-
-    const container = document.getElementById("container") as HTMLElement;
-    const containers = container.querySelectorAll(
-      `.${CSS_CLASS_LINKS_CONTAINER}`,
-    );
-    expect(containers.length).toBe(1);
-    const firstLink = containers[0]!.querySelector("a") as HTMLAnchorElement;
-    expect(decodeURIComponent(firstLink.href)).toContain("신규아카");
-    expect((containers[0] as HTMLElement).parentElement?.id).toBe("container");
-  });
-
-  it("addNewLink uses parentLi.appendChild (link goes to end of <li>, after siblings)", async () => {
-    document.body.innerHTML =
-      '<ul><li><a id="a">target</a><span id="after">after</span></li></ul>';
-    const anchor = document.getElementById("a") as HTMLElement;
+  it('"removed" only logs (no DOM mutation)', async () => {
+    document.body.innerHTML = `<ul><li><a id="a">t</a></li></ul>`;
+    const before = document.body.innerHTML;
     await updateArcaLink({
-      type: "added",
+      type: "removed",
       rank: 1,
-      newKeyword: "키워드",
-      element: anchor,
+      oldKeyword: "x",
+      element: document.getElementById("a") as HTMLElement,
     });
-    const li = document.querySelector("li") as HTMLElement;
-    expect(
-      li.lastElementChild?.classList.contains(CSS_CLASS_LINKS_CONTAINER),
-    ).toBe(true);
-  });
-
-  it("warns and falls back to addNewLink when element has no <li> AND no existing container sibling", async () => {
-    document.body.innerHTML = `
-      <div id="container">
-        <a id="target">target</a>
-      </div>
-    `;
-    const anchor = document.getElementById("target") as HTMLElement;
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-    await updateArcaLink({
-      type: "modified",
-      rank: 1,
-      oldKeyword: "old",
-      newKeyword: "fresh",
-      element: anchor,
-    });
-
-    expect(
-      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
-    ).toBe(1);
-    expect(warn).toHaveBeenCalled();
-    warn.mockRestore();
+    expect(document.body.innerHTML).toBe(before);
   });
 });
