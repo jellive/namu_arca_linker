@@ -5,18 +5,24 @@
 
 /* 기본 스타일 */
 .arca-link {
+  display: inline-flex;
+  align-items: center;
   margin-left: 6px;
-  padding: 2px 8px;
-  font-size: 11px;
+  padding: 0.12rem 0.32rem;
+  font-size: 0.78rem;
   font-weight: 500;
+  line-height: 1;
   text-decoration: none;
   border-radius: 4px;
   transition: all 0.2s ease;
-  display: inline-block;
   vertical-align: middle;
   cursor: pointer;
-  line-height: 1.4;
   white-space: nowrap;
+}
+
+/* thread links (💬) get subtle emphasis vs search fallback (🔎) */
+.arca-link[data-arca-thread] {
+  font-weight: 600;
 }
 
 /* 라이트 모드 스타일 */
@@ -88,24 +94,22 @@
   }
 }
 
-/* 멀티사이트 링크 컨테이너 — 좁은 위젯에서 다음 줄로 wrap */
+/* 단일 뱃지 컨테이너 — 좁은 위젯(~278px)에서 한 줄 유지 */
 .arca-links {
   display: inline-flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
   margin-left: 6px;
+  white-space: nowrap;
   vertical-align: middle;
 }
 
-/* 컨테이너 안에서는 각 링크의 좌측 마진 제거 (gap이 간격을 담당) */
+/* 컨테이너 안에서는 각 링크의 좌측 마진 제거 */
 .arca-links .arca-link {
   margin-left: 0;
 }
 
 @media (max-width: 768px) {
   .arca-links {
-    gap: 3px;
     margin-left: 4px;
   }
 }
