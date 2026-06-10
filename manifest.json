@@ -10,6 +10,9 @@
     "default_title": "나무위키 아카링커"
   },
   "options_page": "dist/options.html",
+  "background": {
+    "service_worker": "dist/background.js"
+  },
   "content_scripts": [
     {
       "matches": ["https://namu.wiki/*"],
