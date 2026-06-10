@@ -19,6 +19,52 @@ function generateRandomToken(length: number): string {
  * `x-device-token` header. Generated once and persisted to storage.local.
  * The token is NOT registered with arca — any random 64-char string works.
  */
+export interface ArcaArticle {
+  id: number;
+  title: string;
+  categoryDisplayName?: string;
+  createdAt: string;
+  commentCount?: number;
+}
+
+export interface ThreadMatch {
+  id: number;
+  title: string;
+  commentCount?: number;
+  category?: string;
+}
+
+function stripHighlight(title: string): string {
+  return title.replace(/<\/?b[^>]*>/g, "");
+}
+
+function toMatch(a: ArcaArticle): ThreadMatch {
+  return {
+    id: a.id,
+    title: stripHighlight(a.title),
+    commentCount: a.commentCount,
+    category: a.categoryDisplayName,
+  };
+}
+
+/**
+ * Match a namu realtime keyword to a 실검챈 article.
+ * 1) exact title match (case-insensitive), then 2) substring (after <b> strip).
+ */
+export function matchThread(
+  keyword: string,
+  articles: ArcaArticle[],
+): ThreadMatch | null {
+  const kw = keyword.toLowerCase();
+  for (const a of articles) {
+    if (stripHighlight(a.title).toLowerCase() === kw) return toMatch(a);
+  }
+  for (const a of articles) {
+    if (stripHighlight(a.title).toLowerCase().includes(kw)) return toMatch(a);
+  }
+  return null;
+}
+
 export function getDeviceToken(): Promise<string> {
   return new Promise((resolve) => {
     chrome.storage.local.get({ [DEVICE_TOKEN_KEY]: undefined }, (data) => {
