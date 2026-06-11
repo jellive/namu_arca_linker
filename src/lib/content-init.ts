@@ -20,25 +20,17 @@ export async function init(): Promise<void> {
 
   console.log(`${LOG_PREFIX} 익스텐션 시작`);
 
-  const hideInline = await new Promise<boolean>((resolve) => {
-    chrome.storage.sync.get({ hideInlineLinks: false }, (v) =>
-      resolve(Boolean(v["hideInlineLinks"])),
-    );
-  });
-
-  if (!hideInline) {
-    await addArcaLinks();
-  }
+  await addArcaLinks();
   observeRealtimeUpdates();
   onRealtimeChange(() => {
-    if (!hideInline) void addArcaLinks();
+    void addArcaLinks();
   });
 
   if ("navigation" in window) {
     const nav = window.navigation as EventTarget;
     nav.addEventListener("navigate", () => {
       setTimeout(() => {
-        if (!hideInline) void addArcaLinks();
+        void addArcaLinks();
       }, NAV_DELAY_MS);
     });
   }

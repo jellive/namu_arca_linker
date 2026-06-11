@@ -182,16 +182,6 @@ async function init(): Promise<void> {
       showStatus("초기화에 실패했습니다.", true);
     }
   });
-
-  const hideInlineEl = document.getElementById(
-    "hide-inline",
-  ) as HTMLInputElement;
-  chrome.storage.sync.get({ hideInlineLinks: false }, (v) => {
-    hideInlineEl.checked = Boolean(v["hideInlineLinks"]);
-  });
-  hideInlineEl.addEventListener("change", () => {
-    chrome.storage.sync.set({ hideInlineLinks: hideInlineEl.checked });
-  });
 }
 
 document.addEventListener("DOMContentLoaded", init);

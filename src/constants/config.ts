@@ -10,7 +10,5 @@ export const DATA_ATTR_PROCESSED = "data-arca-processed";
 export const ARCA_BASE_URL = "https://arca.live/b/namuhotnow";
 export const LOG_PREFIX = "[나무위키 아카링커]";
 
-export const STORAGE_KEY_HIDE_INLINE = "hideInlineLinks";
-
 export const DATA_ATTR_THREAD = "data-arca-thread";
 export const ARCA_SEARCH_TEMPLATE = `${ARCA_BASE_URL}?target=all&keyword={keyword}`;
