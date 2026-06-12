@@ -20,6 +20,7 @@ const sendMessage = vi.fn();
 beforeEach(() => {
   document.body.innerHTML = "";
   sendMessage.mockReset();
+  threadMatches.clear();
   globalThis.chrome = {
     runtime: { sendMessage: (...a: unknown[]) => sendMessage(...a) },
   } as unknown as typeof chrome;
@@ -150,6 +151,33 @@ describe("addArcaLinks", () => {
         .querySelector('a[href^="/Go?q="]')!
         .getAttribute(DATA_ATTR_PROCESSED),
     ).toBe("true");
+  });
+
+  it("heals a stale link when the keyword at a position changes", async () => {
+    sendMessage.mockResolvedValue({ matches: { 옛키워드: null } });
+    document.body.innerHTML = `<ul><li><a href="/Go?q=옛키워드" title="옛키워드">옛키워드</a></li></ul>`;
+    await addArcaLinks();
+    let link = document.querySelector(
+      `.${CSS_CLASS_LINKS_CONTAINER} a.${CSS_CLASS_ARCA_LINK}`,
+    ) as HTMLAnchorElement;
+    expect(decodeURIComponent(link.href)).toContain("옛키워드");
+
+    // namu rotates the keyword in place (same <a> element, new keyword)
+    const a = document.querySelector('a[href^="/Go?q="]') as HTMLAnchorElement;
+    a.setAttribute("href", "/Go?q=새키워드");
+    a.setAttribute("title", "새키워드");
+    a.textContent = "새키워드";
+    sendMessage.mockResolvedValue({ matches: { 새키워드: null } });
+    await addArcaLinks();
+
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(1); // healed in place, no duplicate
+    link = document.querySelector(
+      `.${CSS_CLASS_LINKS_CONTAINER} a.${CSS_CLASS_ARCA_LINK}`,
+    ) as HTMLAnchorElement;
+    expect(decodeURIComponent(link.href)).toContain("새키워드");
+    expect(decodeURIComponent(link.href)).not.toContain("옛키워드");
   });
 
   it("logs and returns when no realtime markup present", async () => {

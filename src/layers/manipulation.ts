@@ -97,6 +97,7 @@ export function createLinkContainer(
 ): HTMLSpanElement {
   const container = document.createElement("span");
   container.className = CSS_CLASS_LINKS_CONTAINER;
+  container.dataset["arcaKeyword"] = keyword;
   container.appendChild(createThreadLink(keyword, match));
   return container;
 }
@@ -236,22 +237,37 @@ export async function addArcaLinks(): Promise<void> {
     return;
   }
 
-  // First pass: collect (element, keyword) for unprocessed, valid items.
-  const pending: Array<{ el: HTMLElement; keyword: string }> = [];
+  // Collect items needing (re)injection: no container yet, OR an existing
+  // container whose stored keyword differs from the anchor's CURRENT keyword
+  // (namu rotated the 실검 in place → heal the stale link).
+  const pending: Array<{
+    el: HTMLElement;
+    keyword: string;
+    stale: HTMLElement | null;
+  }> = [];
   for (const item of realtimeItems) {
     const el = item as HTMLElement;
-    if (el.hasAttribute(DATA_ATTR_PROCESSED)) continue;
     const keyword = el.getAttribute("title") || el.textContent?.trim() || "";
     if (!keyword || /^\d+$/.test(keyword)) continue;
-    pending.push({ el, keyword });
+    const parentLi = el.closest("li");
+    const existing = parentLi
+      ? parentLi.querySelector<HTMLElement>(`.${CSS_CLASS_LINKS_CONTAINER}`)
+      : el.nextElementSibling?.classList.contains(CSS_CLASS_LINKS_CONTAINER)
+        ? (el.nextElementSibling as HTMLElement)
+        : null;
+    if (existing && existing.dataset["arcaKeyword"] === keyword) {
+      continue; // already in sync
+    }
+    pending.push({ el, keyword, stale: existing });
   }
   if (pending.length === 0) return;
 
-  // One SW round for all keywords, then inject.
+  // One SW round for all keywords needing (re)injection, then inject.
   await refreshThreadMatches(pending.map((p) => p.keyword));
 
   let addedCount = 0;
-  for (const { el, keyword } of pending) {
+  for (const { el, keyword, stale } of pending) {
+    if (stale) stale.remove();
     el.setAttribute(DATA_ATTR_PROCESSED, "true");
     const container = createLinkContainer(
       keyword,
@@ -260,6 +276,6 @@ export async function addArcaLinks(): Promise<void> {
     if (insertContainer(el, container)) addedCount++;
   }
   console.log(
-    `${LOG_PREFIX} ${addedCount}개 항목에 링크 추가 완료 (선택자: ${usedSelector})`,
+    `${LOG_PREFIX} ${addedCount}개 링크 동기화 (선택자: ${usedSelector})`,
   );
 }
