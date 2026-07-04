@@ -42,3 +42,24 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  auto-merge:
+    name: Dependabot auto-merge (patch/minor)
+    needs: [verify]
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]' && github.event_name == 'pull_request'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a  # v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      # needs:[verify] gates this on CI passing; only patch/minor auto-merge.
+      - name: Merge patch/minor updates
+        if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr merge --squash "${{ github.event.pull_request.html_url }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
