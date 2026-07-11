@@ -7,11 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-07-12
+
 ### Fixed
 
 - 빈 catch 블록 제거: `sanitizeUrl` (manipulation.ts), `isAllowedUrl` (options.ts)에 의미 있는 `console.warn` 로깅 추가
 - `chrome.storage` 콜백에 `chrome.runtime.lastError` 체크 추가 (content.ts, popup.ts, options.ts)
 - `saveSites` 저장 실패 시 사용자에게 오류 메시지 표시
+
+### Changed
+
+- 개발 의존성 보안 패치: `vite` ^7.3.5, `undici`/`esbuild` override 적용 (Dependabot 알림 대응, 빌드 도구 한정으로 런타임 영향 없음)
+
+## [1.5.1] - 2026-06-12
+
+### Fixed
+
+- 나무위키 실검 순위가 바뀔 때 갱신되지 않고 남아있던 stale 링크 self-heal: 컨테이너에 키워드를 저장해두고 anchor의 현재 키워드와 다르면 교체하도록 변경
+
+### Removed
+
+- 우측 독 패널 제거에 따라 obsolete해진 `hideInlineLinks` 옵션 제거
+
+## [1.5.0] - 2026-06-10
+
+**namu 2.0 Phase 1**
+
+### Added
+
+- 백그라운드 서비스 워커(`dist/background.js`) 도입 (MV3)
+- 아카라이브 앱 API 연동으로 실검 키워드 ↔ 실검챈(`namuhotnow`) 게시글 스마트 매칭 — 💬 토론글 직링크 / 🔎 검색 링크
+- `declarativeNetRequest`로 arca.live API 요청에 앱 User-Agent 스푸핑
+
+### Removed
+
+- 우측 독 패널(`panel.ts`/`trends.ts`) 제거 — 1.4.0에서 추가됐던 실험 기능 회수
+
+## [1.4.0] - 2026-06-09
+
+### Added
+
+- 우측 독 패널(hub panel) 프로토타입 — 실검 랭킹 + 트렌드 배지 표시 (1.5.0에서 제거됨, 아래 참고)
+
+## [1.3.0] - 2026-06-08
+
+### Added
+
+- 멀티 사이트 퀵링크: 기본 대상 사이트 5개로 확장, 사이트별 짧은 라벨(short label) 옵션 추가
+- 여러 사이트 링크를 함께 감싸는(wrapping) 멀티링크 컨테이너 스타일
 
 ## [1.2.0] - 2025-12-01
 
