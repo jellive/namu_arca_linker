@@ -1,7 +1,18 @@
 import { LOG_PREFIX, NAV_DELAY_MS } from "../constants/config";
 import { addArcaLinks } from "../layers/manipulation";
 import { onRealtimeChange, observeRealtimeUpdates } from "../layers/observer";
+import { extractCurrentKeywords } from "../layers/discovery";
 import { getStorageState } from "./storage";
+import { writeCurrentKeywords } from "./snapshot-storage";
+
+/**
+ * Push the current keyword list to chrome.storage.local so the background
+ * service worker (chrome.alarms snapshot) and the side panel — neither of
+ * which can read the namu.wiki DOM directly — can see it.
+ */
+function pushCurrentKeywords(): void {
+  void writeCurrentKeywords(extractCurrentKeywords());
+}
 
 /**
  * Pure boot logic for the content script. Side-effect-free at module load
@@ -21,9 +32,11 @@ export async function init(): Promise<void> {
   console.log(`${LOG_PREFIX} 익스텐션 시작`);
 
   await addArcaLinks();
+  pushCurrentKeywords();
   observeRealtimeUpdates();
   onRealtimeChange(() => {
     void addArcaLinks();
+    pushCurrentKeywords();
   });
 
   if ("navigation" in window) {
