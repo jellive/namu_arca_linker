@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "나무위키 실검 아카라이브 링커",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "description": "나무위키 실시간 검색어 옆에 아카라이브 링크를 추가하고, 검색어 변경을 자동 추적합니다",
   "host_permissions": ["https://namu.wiki/*", "https://arca.live/*"],
-  "permissions": ["storage", "declarativeNetRequest"],
+  "permissions": ["storage", "declarativeNetRequest", "alarms"],
   "action": {
     "default_popup": "dist/popup.html",
     "default_title": "나무위키 아카링커"
