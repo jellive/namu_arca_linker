@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-07-12
+
+### Added
+
+- 사이드 패널(`chrome.sidePanel`): 현재 나무위키 실시간 검색어 목록을 콘텐츠 스크립트와 동일한 💬(실검챈 토론글)/🔎(검색) 스마트 링크와 함께 표시. 나무위키 탭을 연 적이 없으면 "나무위키 탭에서 실검을 읽어옵니다" 안내 표시.
+- 5분 주기 실검 스냅샷(`chrome.alarms`): 콘텐츠 스크립트가 관찰한 최신 검색어 목록을 `chrome.storage.local`에 5분마다 스냅샷으로 적립(최근 48개 = 4시간, 초과분은 자동 정리).
+- 사이드 패널에 직전 스냅샷 대비 변경 배지(NEW / ▲ / ▼) 표시.
+
 ## [1.5.2] - 2026-07-12
 
 ### Fixed
