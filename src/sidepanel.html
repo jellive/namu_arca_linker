@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self';"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>나무위키 실검 패널</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --surface: #f5f5f5;
+        --border: #e0e0e0;
+        --text: #1a1a1a;
+        --text-sub: #666666;
+        --accent: #4a90d9;
+        --up: #2ecc71;
+        --down: #e74c3c;
+        --new: #f5a623;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1e1e1e;
+          --surface: #2a2a2a;
+          --border: #3a3a3a;
+          --text: #f0f0f0;
+          --text-sub: #aaaaaa;
+          --accent: #5ba3e8;
+          --up: #2ecc71;
+          --down: #e74c3c;
+          --new: #f5a623;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        padding: 12px;
+      }
+
+      h1 {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 10px;
+      }
+
+      #empty-state {
+        display: none;
+        font-size: 12px;
+        color: var(--text-sub);
+        background: var(--surface);
+        border-radius: 8px;
+        padding: 14px 12px;
+        text-align: center;
+      }
+
+      #kw-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .kw-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 10px;
+      }
+
+      .kw-rank {
+        min-width: 18px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--accent);
+        text-align: right;
+      }
+
+      .kw-name {
+        flex: 1;
+        font-size: 13px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .kw-badge {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+
+      .kw-badge-new {
+        color: #ffffff;
+        background: var(--new);
+      }
+
+      .kw-badge-up {
+        color: #ffffff;
+        background: var(--up);
+      }
+
+      .kw-badge-down {
+        color: #ffffff;
+        background: var(--down);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>나무위키 실시간 검색어</h1>
+
+    <div id="empty-state">나무위키 탭에서 실검을 읽어옵니다</div>
+    <div id="kw-list"></div>
+
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

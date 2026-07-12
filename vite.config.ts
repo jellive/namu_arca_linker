@@ -47,6 +47,12 @@ export default defineConfig({
             resolve(__dirname, "dist/options.html"),
           );
         }
+        if (entry === "sidepanel") {
+          copyFileSync(
+            resolve(__dirname, "src/sidepanel.html"),
+            resolve(__dirname, "dist/sidepanel.html"),
+          );
+        }
       },
     },
   ],
