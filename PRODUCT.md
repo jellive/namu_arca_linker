@@ -6,7 +6,7 @@
 
 web
 
-Chrome 확장(Manifest V3). UI 표면이 네 개이며 각각 성격이 다르다 — 아래 Operating Context 참조.
+Chrome 확장(Manifest V3). UI 표면이 세 개이며 각각 성격이 다르다 — 아래 Operating Context 참조.
 
 ## Users
 
@@ -43,11 +43,13 @@ UI·문서·커밋이 전부 한국어이고 i18n 이 없다 — 비한국어 �
 | 표면 | 성격 | 제약 |
 |---|---|---|
 | **삽입 배지** (content script, `namu.wiki` 한정) | 남의 페이지 안에 얹힌다 | 나무위키 디자인을 방해하면 안 된다. 테마도 나무위키(`theseed`)의 `.theseed-light-mode`/`.theseed-dark-mode`를 따라간다 — OS 설정이 아니다 |
-| **사이드 패널** (`chrome.sidePanel`, v1.6.0) | 실검 목록 + NEW/▲/▼ 변화 배지 | 브라우저 크롬에 붙는 좁고 세로로 긴 면 |
 | **팝업** | 켜기/끄기 토글 + 감지 개수 | 아주 짧게 열렸다 닫힌다 |
 | **옵션 페이지** | 대상 사이트 목록 관리 | 앉아서 설정하는 면 |
 
-배경 서비스 워커는 UI 가 없다(API 호출·매칭·5분 주기 스냅샷 알람).
+배경 서비스 워커는 UI 가 없다(아카라이브 API 호출·매칭).
+
+⚠️ **네 번째 표면(사이드 패널)을 만들었다가 게시 전에 되돌렸다** — 아래 Product Principles 5 참조.
+새 표면을 제안할 때 그 이력을 먼저 볼 것.
 
 **삽입 배지가 이 제품의 얼굴이고, 동시에 가장 조심해야 할 자리다** — 남의 사이트에 무단으로
 얹히는 UI 라서, 눈에 띄되 방해하지 않아야 한다는 두 요구가 정면으로 부딪힌다.
@@ -58,17 +60,14 @@ UI·문서·커밋이 전부 한국어이고 i18n 이 없다 — 비한국어 �
 
 - 나무위키 실검 옆 💬/🔎 스마트 링크 삽입(MutationObserver 로 페이드 갱신)
 - 아카라이브 앱 API 조회 + 제목 매칭
-- 사이드 패널 실검 목록 + 직전 스냅샷 대비 NEW/▲/▼ 배지 (v1.6.0)
-- 5분 주기 스냅샷 적립(`chrome.alarms`, 최근 48개 = 4시간, 초과분 자동 정리)
 - 멀티 사이트 퀵링크(네이버·구글·X·DCInside), 옵션에서 편집
 
 ### MV3 제약 — 설계를 강제한 것들
 
-- **영속 백그라운드 페이지가 없다.** 그래서 `setInterval` 이 아니라 `chrome.alarms` 기반
-  스냅샷 설계가 됐다.
-- 요청 권한: `storage`, `declarativeNetRequest`, `alarms`, `sidePanel`.
+- **영속 백그라운드 페이지가 없다.** 서비스 워커는 필요할 때만 깨어난다.
+- 요청 권한은 **두 개뿐이다**: `storage`, `declarativeNetRequest`.
   호스트 권한: `https://namu.wiki/*`, `https://arca.live/*`. **그 이상 요구하지 않는다** —
-  `activeTab`·`tabs`·`scripting` 없음.
+  `activeTab`·`tabs`·`scripting` 없음. 권한을 늘리는 제안은 Principles 3·5 를 먼저 통과해야 한다.
 - CSP: `script-src 'self'; object-src 'none'; base-uri 'none'` — 원격 코드 미사용
   (스토어 신고 내용과 일치).
 - 콘텐츠 스크립트는 `https://namu.wiki/*` 에서만, `document_end`.
@@ -109,17 +108,15 @@ UI·문서·커밋이 전부 한국어이고 i18n 이 없다 — 비한국어 �
 ## Evidence on Hand
 
 **출시돼 있다 — 그리고 실사용자가 있다:**
-- 내부 릴리스 플랜(`plans/001-cws-v152-update-release.md`, 2026-07-12)이 명시:
-  **v1.5.1 이 2026-06-12 스토어에 게시됨, 아이템 ID `fhmagpkcdpcnmbihkgdcmabidcmdmpgl`,
-  사용자 42명, 평점 5.0★.**
-  ⚠️ 이 수치는 **2026-07-12 시점 스냅샷이고 내부 문서 기재이지 실시간 확인값이 아니다.**
+- 스토어 아이템 ID `fhmagpkcdpcnmbihkgdcmabidcmdmpgl`.
+  **2026-08-24 기준 게시 버전 `1.5.3`** (`deploy:status` 의 `crxVersion` 으로 실측).
+- 그 직전까지 스토어는 **1.5.1**(2026-06-12 게시)에 두 달 넘게 멈춰 있었다. 1.5.2 의
+  견고성 수정이 그동안 사용자에게 가지 않았고, 1.5.3 이 그것까지 함께 실어 보냈다.
+- 사용자 수·평점: 내부 릴리스 플랜(`plans/001-cws-v152-update-release.md`)에 **2026-07-12
+  시점 42명 / 5.0★** 로 기재돼 있다. ⚠️ **그 시점 스냅샷이고 실시간 확인값이 아니다** —
   현재값으로 인용하지 않는다.
-- `chore: release v1.5.2` 커밋 존재.
-- 빌드 산출물: `release/namu_arca_linker-v1.5.2.zip`, `release/namu_arca_linker-v1.6.0.zip`
-
-🔴 **v1.6.0 은 아직 게시되지 않았다.** manifest 는 `1.6.0`, CHANGELOG 에 `[1.6.0] - 2026-07-12`
-항목이 있고 zip 도 만들어져 있으나 **`chore: release v1.6.0` 커밋이 없고** 그 이후 커밋은
-전부 dependabot 패치다. 즉 **사이드 패널과 스냅샷 배지는 만들어졌지만 사용자에게 가지 않았다.**
+- 빌드 산출물: `release/` 에 v1.5.2 · v1.6.0 · v1.5.3 zip.
+  (v1.6.0 zip 은 되돌려진 릴리즈의 잔재이며 게시된 적이 없다.)
 
 **없는 것 — 지어내지 않는다:**
 - **스크린샷이 하나도 없다.** `STORE_LISTING.md` §7 이 스크린샷을 "촬영해야 할 목록"으로
