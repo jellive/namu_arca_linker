@@ -2,9 +2,12 @@
 
 This file contains copy-paste ready content for the Chrome Web Store developer console submission.
 
-- **Package version**: 1.5.2
-- **Submittable zip**: `release/namu_arca_linker-v1.5.2.zip`
+- **Package version**: 1.6.0
+- **Submittable zip**: `release/namu_arca_linker-v1.6.0.zip`
 - **Manifest**: Manifest V3
+- **릴리즈 성격**: 업데이트 (v1.5.1 게시 중, item `fhmagpkcdpcnmbihkgdcmabidcmdmpgl`)
+- **⚠️ 1.6.0 은 권한 2개가 추가된다** — `sidePanel`, `alarms`. 10번 권한 소명에 두 항목이
+  포함돼 있어야 하며, 권한 추가 릴리즈는 심사가 길어질 수 있다.
 
 ---
 
@@ -64,6 +67,7 @@ This file contains copy-paste ready content for the Chrome Web Store developer c
 - 부드러운 페이드 애니메이션으로 링크가 자연스럽게 교체됩니다.
 - 나무위키의 다크모드/라이트모드에 맞춰 링크 스타일이 자동으로 바뀝니다.
 - 반응형 디자인으로 모바일 화면에서도 깔끔하게 표시됩니다.
+- **사이드 패널(v1.6.0)**: 브라우저 사이드 패널에서 현재 실시간 검색어 목록을 같은 💬/🔎 링크와 함께 볼 수 있습니다. 직전 대비 변화를 NEW / ▲ / ▼ 배지로 표시합니다.
 
 ## 작동 방식
 
@@ -75,6 +79,8 @@ This file contains copy-paste ready content for the Chrome Web Store developer c
 - `namu.wiki` 호스트 권한: 나무위키 페이지에 실검 링크를 주입하기 위해 필요합니다.
 - `arca.live` 호스트 권한: 백그라운드 서비스 워커가 실검챈(namuhotnow) 게시글 목록을 조회해 검색어와 매칭하기 위해 필요합니다.
 - `declarativeNetRequest`: arca.live API 요청에 앱 User-Agent를 지정하기 위한 요청 헤더 수정에 사용합니다. namu.wiki/arca.live 요청에만 적용되며 사용자를 추적하지 않습니다.
+- `sidePanel`: 현재 실시간 검색어 목록을 브라우저 사이드 패널에서 바로 볼 수 있게 하기 위해 사용합니다.
+- `alarms`: 실시간 검색어 목록의 변화(NEW/▲/▼)를 보여주기 위해 5분 주기로 로컬 스냅샷을 남기는 데 사용합니다. 네트워크 요청을 발생시키지 않습니다.
 
 ## 개인정보 처리 방침
 
@@ -182,6 +188,18 @@ Chrome Web Store 심사 양식에서 각 권한의 사용 목적을 묻습니다
   arca.live 목록 API 요청에 앱 User-Agent를 지정하기 위해 요청 헤더를 수정하는 데 사용합니다. namu.wiki/arca.live로 나가는 요청에만 적용되며, 요청을 차단하거나 사용자를 추적하지 않습니다.
   ```
 
+- **sidePanel 권한 사용 사유**
+
+  ```
+  나무위키에서 관찰한 현재 실시간 검색어 목록을 브라우저 사이드 패널에 표시하기 위해 사용합니다. 페이지 내 링크 주입과 동일한 💬(실검챈 매칭 게시글) / 🔎(검색) 링크를 제공하며, 사이드 패널은 사용자가 직접 열 때만 표시됩니다.
+  ```
+
+- **alarms 권한 사용 사유**
+
+  ```
+  실시간 검색어의 변화(신규 진입 NEW, 순위 상승 ▲, 하락 ▼)를 표시하기 위해 5분 주기로 현재 검색어 목록의 스냅샷을 chrome.storage.local 에 남기는 데 사용합니다. 최근 48개(약 4시간)만 보관하고 초과분은 자동 삭제하며, 이 알람은 네트워크 요청을 발생시키지 않고 어떤 데이터도 외부로 전송하지 않습니다.
+  ```
+
 - **원격 코드 사용 여부**
 
   ```
@@ -210,9 +228,14 @@ Chrome Web Store 심사 양식에서 각 권한의 사용 목적을 묻습니다
 
 Chrome Web Store Developer Console 에서 수행할 단계입니다. 코드/패키지 준비는 모두 끝났습니다.
 
-1. https://chrome.google.com/webstore/devconsole 접속 (Google 계정 로그인).
-2. 최초 등록 계정이면 일회성 등록비 **$5 USD** 결제.
-3. "새 항목" 클릭 → `release/namu_arca_linker-v1.5.2.zip` 업로드.
+⚠️ **이미 게시된 항목의 업데이트다 — "새 항목"이 아니다.** 아래 1~2번은 최초 등록 때의
+잔재이며 지금은 해당하지 않는다. 기존 항목 `fhmagpkcdpcnmbihkgdcmabidcmdmpgl` 을 열어
+새 패키지를 업로드한다. CLI 경로(`npm run deploy:upload && npm run deploy:publish`)를 쓰면
+이 절차 대신 자동화된다.
+
+1. ~~https://chrome.google.com/webstore/devconsole 접속~~ (최초 등록 시)
+2. ~~일회성 등록비 $5 USD 결제~~ (완료됨)
+3. 기존 항목 → "패키지" → `release/namu_arca_linker-v1.6.0.zip` 업로드.
 4. 본 문서 1~6 항목을 해당 입력란에 복사/붙여넣기 (이름, 짧은 설명, 상세 설명, 카테고리, 언어, 개인정보 처리방침).
 5. 7번 항목을 참고해 스크린샷 3~5장 촬영 후 업로드 (1280x800).
 6. 8번 항목을 참고해 440x280 프로모 타일 제작 후 업로드.
