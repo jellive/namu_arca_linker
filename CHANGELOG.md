@@ -7,13 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.6.0] - 2026-07-12
+## [1.5.3] - 2026-08-24
 
-### Added
+### Removed
 
-- 사이드 패널(`chrome.sidePanel`): 현재 나무위키 실시간 검색어 목록을 콘텐츠 스크립트와 동일한 💬(실검챈 토론글)/🔎(검색) 스마트 링크와 함께 표시. 나무위키 탭을 연 적이 없으면 "나무위키 탭에서 실검을 읽어옵니다" 안내 표시.
-- 5분 주기 실검 스냅샷(`chrome.alarms`): 콘텐츠 스크립트가 관찰한 최신 검색어 목록을 `chrome.storage.local`에 5분마다 스냅샷으로 적립(최근 48개 = 4시간, 초과분은 자동 정리).
-- 사이드 패널에 직전 스냅샷 대비 변경 배지(NEW / ▲ / ▼) 표시.
+- **사이드 패널과 실검 스냅샷 기능을 되돌렸다** (구 1.6.0, 게시된 적 없음). 사이드 패널
+  (`chrome.sidePanel`), 5분 주기 스냅샷 알람(`chrome.alarms`), NEW/▲/▼ 변화 배지가 여기
+  해당한다. 코드는 `backup/pre-1.6.0-revert-20260824` 브랜치에 남아 있다.
+
+  **이유:** 이 확장이 하는 일은 "실검 옆에 링크를 붙인다"이고, 표면 하나를 통째로 더하고
+  백그라운드 알람과 스냅샷 이력을 적립하며 권한 2개(`sidePanel`·`alarms`)를 더 받는 것은
+  그 범위를 벗어난다는 판단이다. 결과적으로 요청 권한은 `storage`·`declarativeNetRequest`
+  두 개로 되돌아왔다.
+
+### Changed
+
+- 개발 의존성 보안 패치: `@babel/core`·`qs`·`js-yaml`·`nanoid`·`brace-expansion`(eslint /
+  stryker / typescript-eslint 하위)·`fast-uri` override 적용. **전부 빌드 도구 한정이며
+  런타임 영향 없음.**
 
 ## [1.5.2] - 2026-07-12
 

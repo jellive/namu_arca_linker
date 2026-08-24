@@ -1,10 +1,10 @@
 {
   "name": "namu_arca_linker",
-  "version": "1.6.0",
+  "version": "1.5.3",
   "description": "나무위키 실시간 검색어 옆에 아카라이브 링크를 자동으로 추가해주는 Chrome Extension입니다.",
   "main": "content.js",
   "scripts": {
-    "build": "BUILD_ONE=content vite build && BUILD_ONE=popup vite build && BUILD_ONE=options vite build && BUILD_ONE=sidepanel vite build && BUILD_ONE=background vite build",
+    "build": "BUILD_ONE=content vite build && BUILD_ONE=popup vite build && BUILD_ONE=options vite build && BUILD_ONE=background vite build",
     "dev": "vite build --watch",
     "test": "vitest",
     "test:run": "vitest run",

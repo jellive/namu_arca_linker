@@ -7,17 +7,10 @@ vi.mock("./lib/arca-api", () => ({
   matchThread: (...a: unknown[]) => matchThread(...a),
 }));
 
-const recordSnapshot = vi.fn();
-vi.mock("./lib/snapshot-storage", () => ({
-  recordSnapshot: (...a: unknown[]) => recordSnapshot(...a),
-}));
-
 // chrome APIs must exist at import time.
 // vi.hoisted runs before module imports, so chrome is defined when background.ts loads.
-const { addListener, alarmsCreate, alarmsOnAlarmAdd } = vi.hoisted(() => {
+const { addListener } = vi.hoisted(() => {
   const addListener = vi.fn();
-  const alarmsCreate = vi.fn();
-  const alarmsOnAlarmAdd = vi.fn();
   globalThis.chrome = {
     runtime: {
       onMessage: { addListener },
@@ -27,21 +20,15 @@ const { addListener, alarmsCreate, alarmsOnAlarmAdd } = vi.hoisted(() => {
     declarativeNetRequest: {
       updateSessionRules: vi.fn(),
     },
-    alarms: {
-      create: alarmsCreate,
-      onAlarm: { addListener: alarmsOnAlarmAdd },
-    },
   } as unknown as typeof chrome;
-  return { addListener, alarmsCreate, alarmsOnAlarmAdd };
+  return { addListener };
 });
 
-import { handleMatchThreads, handleAlarm } from "./background";
-import { SNAPSHOT_ALARM_NAME, SNAPSHOT_INTERVAL_MIN } from "./constants/config";
+import { handleMatchThreads } from "./background";
 
 beforeEach(() => {
   fetchNamuhotnowArticles.mockReset();
   matchThread.mockReset();
-  recordSnapshot.mockReset();
 });
 
 describe("handleMatchThreads", () => {
@@ -66,35 +53,5 @@ describe("handleMatchThreads", () => {
 
   it("registers a runtime.onMessage listener on import", () => {
     expect(addListener).toHaveBeenCalled();
-  });
-});
-
-describe("snapshot alarm", () => {
-  it("registers a chrome.alarms.onAlarm listener on import", () => {
-    expect(alarmsOnAlarmAdd).toHaveBeenCalledWith(handleAlarm);
-  });
-
-  it("registers the snapshot alarm on install/startup with the configured interval", () => {
-    expect(chrome.runtime.onInstalled.addListener).toHaveBeenCalled();
-    const registerFn = (
-      chrome.runtime.onInstalled.addListener as ReturnType<typeof vi.fn>
-    ).mock.calls.find(([fn]) => fn.name === "registerSnapshotAlarm")?.[0] as
-      | (() => void)
-      | undefined;
-    expect(registerFn).toBeDefined();
-    registerFn?.();
-    expect(alarmsCreate).toHaveBeenCalledWith(SNAPSHOT_ALARM_NAME, {
-      periodInMinutes: SNAPSHOT_INTERVAL_MIN,
-    });
-  });
-
-  it("calls recordSnapshot when the matching alarm fires", () => {
-    handleAlarm({ name: SNAPSHOT_ALARM_NAME } as chrome.alarms.Alarm);
-    expect(recordSnapshot).toHaveBeenCalledTimes(1);
-  });
-
-  it("ignores alarms with a different name", () => {
-    handleAlarm({ name: "some-other-alarm" } as chrome.alarms.Alarm);
-    expect(recordSnapshot).not.toHaveBeenCalled();
   });
 });

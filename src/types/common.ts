@@ -9,11 +9,3 @@ export interface KeywordChange {
 }
 
 export type KeywordState = Map<number, string>;
-
-export type SnapshotBadge = "new" | "up" | "down";
-
-/** JSON-serializable snapshot of a KeywordState at a point in time. */
-export interface KeywordSnapshot {
-  t: number; // epoch ms
-  keywords: [number, string][];
-}

@@ -7,8 +7,6 @@ const addArcaLinks = vi.fn().mockResolvedValue(undefined);
 const observeRealtimeUpdates = vi.fn();
 const onRealtimeChange = vi.fn();
 const getStorageState = vi.fn();
-const extractCurrentKeywords = vi.fn();
-const writeCurrentKeywords = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("../layers/manipulation", () => ({
   addArcaLinks: (...args: unknown[]) => addArcaLinks(...args),
@@ -18,15 +16,8 @@ vi.mock("../layers/observer", () => ({
     observeRealtimeUpdates(...args),
   onRealtimeChange: (...args: unknown[]) => onRealtimeChange(...args),
 }));
-vi.mock("../layers/discovery", () => ({
-  extractCurrentKeywords: (...args: unknown[]) =>
-    extractCurrentKeywords(...args),
-}));
 vi.mock("./storage", () => ({
   getStorageState: () => getStorageState(),
-}));
-vi.mock("./snapshot-storage", () => ({
-  writeCurrentKeywords: (...args: unknown[]) => writeCurrentKeywords(...args),
 }));
 
 import { init, setupStorageListener, bootstrap } from "./content-init";
@@ -38,8 +29,6 @@ beforeEach(() => {
   observeRealtimeUpdates.mockClear();
   onRealtimeChange.mockClear();
   getStorageState.mockReset();
-  extractCurrentKeywords.mockReset().mockReturnValue(new Map());
-  writeCurrentKeywords.mockClear();
   onChangedAdd.mockClear();
   globalThis.chrome = {
     storage: {
@@ -92,36 +81,6 @@ describe("init — enabled gate", () => {
     getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
     await init();
     expect(callOrder).toEqual(["addArcaLinks", "observeRealtimeUpdates"]);
-  });
-});
-
-describe("init — pushes current keywords to storage (for alarm snapshot + side panel)", () => {
-  it("pushes the extracted keyword list after the initial addArcaLinks pass", async () => {
-    const kws = new Map([[1, "황승언"]]);
-    extractCurrentKeywords.mockReturnValue(kws);
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
-    await init();
-    expect(writeCurrentKeywords).toHaveBeenCalledWith(kws);
-  });
-
-  it("does not push when disabled (early return before the DOM pass)", async () => {
-    getStorageState.mockResolvedValue({ enabled: false, targetSites: [] });
-    await init();
-    expect(writeCurrentKeywords).not.toHaveBeenCalled();
-  });
-
-  it("re-pushes on every onRealtimeChange notification, not just at init", async () => {
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
-    await init();
-    writeCurrentKeywords.mockClear();
-
-    const changeCallback = onRealtimeChange.mock.calls[0]![0] as () => void;
-    extractCurrentKeywords.mockReturnValue(new Map([[1, "새검색어"]]));
-    changeCallback();
-
-    expect(writeCurrentKeywords).toHaveBeenCalledWith(
-      new Map([[1, "새검색어"]]),
-    );
   });
 });
 
