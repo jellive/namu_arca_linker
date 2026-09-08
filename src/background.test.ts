@@ -140,7 +140,11 @@ describe("onMessage listener", () => {
   it("declines a message of a different type", () => {
     const sendResponse = vi.fn();
     expect(
-      messageListener()({ type: "somethingElse", keywords: ["a"] }, {}, sendResponse),
+      messageListener()(
+        { type: "somethingElse", keywords: ["a"] },
+        {},
+        sendResponse,
+      ),
     ).toBe(false);
     expect(sendResponse).not.toHaveBeenCalled();
     expect(fetchNamuhotnowArticles).not.toHaveBeenCalled();
@@ -149,7 +153,11 @@ describe("onMessage listener", () => {
   it("declines a matchThreads message whose keywords are not an array", () => {
     const sendResponse = vi.fn();
     expect(
-      messageListener()({ type: "matchThreads", keywords: "황승언" }, {}, sendResponse),
+      messageListener()(
+        { type: "matchThreads", keywords: "황승언" },
+        {},
+        sendResponse,
+      ),
     ).toBe(false);
     expect(sendResponse).not.toHaveBeenCalled();
     expect(fetchNamuhotnowArticles).not.toHaveBeenCalled();
@@ -174,7 +182,9 @@ describe("onMessage listener", () => {
     await settle();
 
     expect(sendResponse).toHaveBeenCalledWith({ matches: {} });
-    expect(warn.mock.calls.flat().join(" ")).toContain("matchThreads 처리 실패");
+    expect(warn.mock.calls.flat().join(" ")).toContain(
+      "matchThreads 처리 실패",
+    );
     warn.mockRestore();
   });
 });

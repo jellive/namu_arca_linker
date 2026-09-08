@@ -564,7 +564,8 @@ describe("updateExistingLink", () => {
   });
 
   it("inserts next to the anchor when there is no <li> parent", async () => {
-    document.body.innerHTML = '<div><a id="a" title="옛">옛</a><b id="tail">t</b></div>';
+    document.body.innerHTML =
+      '<div><a id="a" title="옛">옛</a><b id="tail">t</b></div>';
     const el = document.getElementById("a") as HTMLElement;
     el.parentNode!.insertBefore(
       createLinkContainer("옛", null),

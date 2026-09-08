@@ -237,7 +237,9 @@ describe("extractCurrentKeywords — diagnostics", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     document.body.innerHTML = '<ul><li><a href="/Go?q=abc">abc</a></li></ul>';
     extractCurrentKeywords();
-    expect(log.mock.calls.flat().map(String).join(" ")).toContain("현재 검색어");
+    expect(log.mock.calls.flat().map(String).join(" ")).toContain(
+      "현재 검색어",
+    );
     log.mockRestore();
   });
 });

@@ -246,7 +246,9 @@ describe("fetchNamuhotnowArticles — request shape", () => {
   });
 
   it("treats a response without an `articles` key as an empty page", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({}) });
     vi.stubGlobal("fetch", fetchMock);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -260,7 +262,9 @@ describe("fetchNamuhotnowArticles — request shape", () => {
   it("returns [] and names the status when the API answers non-OK", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: false, status: 503, json: async () => ({}) }),
+      vi
+        .fn()
+        .mockResolvedValue({ ok: false, status: 503, json: async () => ({}) }),
     );
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -302,7 +306,9 @@ describe("getDeviceToken — storage contract", () => {
       cb({ arcaDeviceToken: "z".repeat(64) }),
     );
     await getDeviceToken();
-    expect(Object.keys(localGet.mock.calls[0]![0])).toEqual(["arcaDeviceToken"]);
+    expect(Object.keys(localGet.mock.calls[0]![0])).toEqual([
+      "arcaDeviceToken",
+    ]);
   });
 
   it("still resolves with the token when persisting it fails", async () => {
