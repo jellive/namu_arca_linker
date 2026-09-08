@@ -126,3 +126,70 @@ describe("detectKeywordChanges", () => {
     logSpy.mockRestore();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Behaviours below pin the diff log lines and the "nothing changed" path,
+// which mutation testing showed were reached but never asserted on.
+// ---------------------------------------------------------------------------
+
+const logText = (spy: ReturnType<typeof vi.spyOn>) =>
+  spy.mock.calls.map((c) => c.join(" ")).join("\n");
+
+describe("detectKeywordChanges — diagnostics", () => {
+  it("says it is seeding the cache on the first call", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockKeywords(new Map([[1, "키워드A"]]));
+    detectKeywordChanges();
+    expect(logText(log)).toContain("검색어 캐시 초기화");
+    log.mockRestore();
+  });
+
+  it("logs every change with its rank and keyword", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    keywordCache.set(1, "이전");
+    keywordCache.set(3, "사라질");
+    mockKeywords(
+      new Map([
+        [1, "이후"],
+        [2, "신규"],
+      ]),
+    );
+    detectKeywordChanges();
+    const text = logText(log);
+    expect(text).toContain('순위 1: "이전" → "이후"');
+    expect(text).toContain('순위 2 신규: "신규"');
+    expect(text).toContain('순위 3 삭제: "사라질"');
+    expect(text).toContain("총 3개 변경 감지");
+    log.mockRestore();
+  });
+
+  it("attaches the element to an ADDED change, not only a modified one", () => {
+    const fakeAnchor = document.createElement("a");
+    vi.spyOn(discovery, "getRealtimeLinkByRank").mockReturnValue(fakeAnchor);
+    vi.spyOn(discovery, "extractCurrentKeywords").mockReturnValue(
+      new Map([
+        [1, "기존"],
+        [2, "신규"],
+      ]),
+    );
+    keywordCache.set(1, "기존");
+
+    const changes = detectKeywordChanges();
+
+    expect(changes).toHaveLength(1);
+    expect(changes[0]!.type).toBe("added");
+    expect(changes[0]!.element).toBe(fakeAnchor);
+  });
+
+  it("stays silent when a WARM cache sees an unchanged keyword list", () => {
+    // Distinct from the first-call path: this one actually reaches the
+    // "총 N개 변경 감지" guard with an empty change set.
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    keywordCache.set(1, "그대로");
+    mockKeywords(new Map([[1, "그대로"]]));
+
+    expect(detectKeywordChanges()).toEqual([]);
+    expect(logText(log)).not.toContain("변경 감지");
+    log.mockRestore();
+  });
+});

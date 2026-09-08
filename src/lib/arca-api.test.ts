@@ -155,3 +155,174 @@ describe("fetchNamuhotnowArticles", () => {
     vi.unstubAllGlobals();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Behaviours below pin paths that mutation testing showed were exercised but
+// never asserted on (paging, dedup, cache expiry, HTTP failure).
+// ---------------------------------------------------------------------------
+
+const warnText = (spy: ReturnType<typeof vi.spyOn>) =>
+  spy.mock.calls.flat().map(String).join(" ");
+
+describe("stripHighlight (via matchThread)", () => {
+  it("strips both halves of a <b> pair, attributes included", () => {
+    const arts: ArcaArticle[] = [
+      { id: 7, title: '<b class="hl">손흥민</b> 결승골', createdAt: "t" },
+    ];
+    expect(matchThread("손흥민", arts)!.title).toBe("손흥민 결승골");
+  });
+});
+
+describe("matchThread — exact beats substring", () => {
+  it("prefers an exact title match over an EARLIER substring match", () => {
+    const arts: ArcaArticle[] = [
+      { id: 1, title: "실시간 LCK 결승 이야기", createdAt: "t1" },
+      { id: 2, title: "LCK", createdAt: "t2" },
+    ];
+    expect(matchThread("lck", arts)!.id).toBe(2);
+  });
+});
+
+describe("fetchNamuhotnowArticles — request shape", () => {
+  beforeEach(() => {
+    _resetArcaCache();
+    localGet.mockImplementation((_d, cb) =>
+      cb({ arcaDeviceToken: "t".repeat(64) }),
+    );
+  });
+
+  it("requests the namuhotnow channel list with the given limit and no `before`", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ articles: [] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchNamuhotnowArticles(30);
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      "https://arca.live/api/app/list/channel/namuhotnow?limit=30",
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("does not request a second page when the first page is empty", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ articles: [] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(await fetchNamuhotnowArticles()).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(warn).not.toHaveBeenCalled(); // no crash swallowed by the catch
+
+    warn.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("drops page-2 articles that already appeared on page 1", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          articles: [
+            { id: 1, title: "a", createdAt: "c1" },
+            { id: 2, title: "b", createdAt: "c2" },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          articles: [
+            { id: 2, title: "b", createdAt: "c2" },
+            { id: 3, title: "c", createdAt: "c3" },
+          ],
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    const arts = await fetchNamuhotnowArticles();
+    expect(arts.map((a) => a.id)).toEqual([1, 2, 3]);
+    vi.unstubAllGlobals();
+  });
+
+  it("treats a response without an `articles` key as an empty page", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(await fetchNamuhotnowArticles()).toEqual([]);
+    expect(warn).not.toHaveBeenCalled();
+
+    warn.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("returns [] and names the status when the API answers non-OK", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 503, json: async () => ({}) }),
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(await fetchNamuhotnowArticles()).toEqual([]);
+    expect(warnText(warn)).toContain("arca API 503");
+    expect(warnText(warn)).toContain("검색 폴백");
+
+    warn.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("re-fetches once the 3-minute cache TTL has elapsed", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ articles: [] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const now = vi.spyOn(Date, "now");
+
+    now.mockReturnValue(1_000_000);
+    await fetchNamuhotnowArticles();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    now.mockReturnValue(1_000_000 + 60_000); // 1 min later — still fresh
+    await fetchNamuhotnowArticles();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    now.mockReturnValue(1_000_000 + 200_000); // past 3 min — stale
+    await fetchNamuhotnowArticles();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    now.mockRestore();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("getDeviceToken — storage contract", () => {
+  it("asks chrome.storage.local for the device-token key by name", async () => {
+    localGet.mockImplementation((_d, cb) =>
+      cb({ arcaDeviceToken: "z".repeat(64) }),
+    );
+    await getDeviceToken();
+    expect(Object.keys(localGet.mock.calls[0]![0])).toEqual(["arcaDeviceToken"]);
+  });
+
+  it("still resolves with the token when persisting it fails", async () => {
+    localGet.mockImplementation((_d, cb) => cb({ arcaDeviceToken: undefined }));
+    localSet.mockImplementation((_v: unknown, cb?: () => void) => {
+      (
+        globalThis.chrome as unknown as {
+          runtime: { lastError?: { message: string } };
+        }
+      ).runtime = { lastError: { message: "QUOTA_BYTES exceeded" } };
+      cb?.();
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const token = await getDeviceToken();
+
+    expect(token).toHaveLength(64);
+    expect(warnText(warn)).toContain("device-token 저장 실패");
+    expect(warnText(warn)).toContain("QUOTA_BYTES exceeded");
+
+    warn.mockRestore();
+  });
+});

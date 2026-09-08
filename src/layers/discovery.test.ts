@@ -71,7 +71,9 @@ describe("extractKeywordFromLink", () => {
     } as unknown as typeof URL;
     try {
       expect(extractKeywordFromLink(fakeAnchor)).toBe("fallback");
-      expect(warn).toHaveBeenCalled();
+      expect(warn.mock.calls.flat().map(String).join(" ")).toContain(
+        "URL 파싱 실패",
+      );
     } finally {
       globalThis.URL = origURL;
       warn.mockRestore();
@@ -191,5 +193,51 @@ describe("getRealtimeLinkByRank", () => {
       </div>
     `;
     expect(getRealtimeLinkByRank(2)?.id).toBe("t2");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behaviours below pin paths that mutation testing showed were exercised but
+// never distinguished — mostly because fixtures used the same value for the
+// URL parameter and the anchor text.
+// ---------------------------------------------------------------------------
+
+describe("extractKeywordFromLink — URL vs text precedence", () => {
+  it("does NOT read the q param of a search URL that is not /Go?q=", () => {
+    const a = makeAnchor("https://namu.wiki/search?q=fromurl", "fromtext");
+    expect(extractKeywordFromLink(a)).toBe("fromtext");
+  });
+
+  it("uses the q param rather than the anchor text on a /Go?q= link", () => {
+    const a = makeAnchor("https://namu.wiki/Go?q=fromurl", "fromtext");
+    expect(extractKeywordFromLink(a)).toBe("fromurl");
+  });
+
+  it("returns null when the element exposes a null textContent", () => {
+    const fake = { href: "", textContent: null } as unknown as HTMLElement;
+    expect(extractKeywordFromLink(fake)).toBeNull();
+  });
+});
+
+describe("extractCurrentKeywords — diagnostics", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("says what it could not find when no selector matches", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    extractCurrentKeywords();
+    expect(warn.mock.calls.flat().map(String).join(" ")).toContain(
+      "실검 요소를 찾을 수 없음",
+    );
+    warn.mockRestore();
+  });
+
+  it("logs the keyword list it extracted", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    document.body.innerHTML = '<ul><li><a href="/Go?q=abc">abc</a></li></ul>';
+    extractCurrentKeywords();
+    expect(log.mock.calls.flat().map(String).join(" ")).toContain("현재 검색어");
+    log.mockRestore();
   });
 });

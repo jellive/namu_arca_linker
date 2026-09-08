@@ -455,9 +455,87 @@ describe("observer.ts — observeRealtimeUpdates", () => {
 
 describe("onRealtimeChange pub/sub", () => {
   it("invokes registered listeners when a change is emitted", () => {
+    // The "no warning" half matters: the subscriber list must start empty, so
+    // a well-behaved listener produces a clean emit.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     let calls = 0;
     onRealtimeChange(() => calls++);
     emitRealtimeChange();
     expect(calls).toBe(1);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("keeps notifying the remaining listeners when one throws", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const boom = vi.fn(() => {
+      throw new Error("listener boom");
+    });
+    const after = vi.fn();
+    onRealtimeChange(boom);
+    onRealtimeChange(after);
+
+    emitRealtimeChange();
+
+    expect(boom).toHaveBeenCalled();
+    expect(after).toHaveBeenCalled(); // one bad listener must not stop the rest
+    expect(warn.mock.calls.flat().map(String).join(" ")).toContain(
+      "onRealtimeChange listener error",
+    );
+    warn.mockRestore();
+  });
+});
+
+describe("observeRealtimeUpdates — retry accounting", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    globalThis.chrome = {
+      runtime: { sendMessage: vi.fn().mockResolvedValue({ matches: {} }) },
+    } as unknown as typeof chrome;
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    document.body.innerHTML = "";
+  });
+
+  const logText = (spy: ReturnType<typeof vi.spyOn>) =>
+    spy.mock.calls.map((c) => c.join(" ")).join("\n");
+
+  it("gives up after exactly 5 retries, not before and not never", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    observeRealtimeUpdates();
+
+    vi.advanceTimersByTime(500 * 4); // 4 retries so far
+    expect(logText(log)).not.toContain("찾지 못해");
+
+    vi.advanceTimersByTime(500); // 5th retry → give up
+    expect(logText(log)).toContain("찾지 못해");
+
+    log.mockRestore();
+  });
+
+  it("reports which retry found the container", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    observeRealtimeUpdates();
+
+    vi.advanceTimersByTime(500); // retry 1 — still nothing
+    document.body.innerHTML = '<ul><li><a href="/Go?q=k">k</a></li></ul>';
+    vi.advanceTimersByTime(500); // retry 2 — found
+
+    expect(logText(log)).toContain("컨테이너 발견 (재시도 2)");
+    log.mockRestore();
+  });
+
+  it("names the selector when the container is present from the start", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    document.body.innerHTML = '<ul><li><a href="/Go?q=k">k</a></li></ul>';
+
+    observeRealtimeUpdates();
+
+    expect(logText(log)).toContain("컨테이너 발견");
+    expect(logText(log)).toContain("MutationObserver 설정 완료");
+    log.mockRestore();
   });
 });

@@ -206,3 +206,80 @@ describe("bootstrap — readyState dispatch", () => {
     expect(addArcaLinks).toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Behaviours below pin callbacks that were registered but never invoked by a
+// test, plus the lifecycle log lines.
+// ---------------------------------------------------------------------------
+
+const logText = (spy: ReturnType<typeof vi.spyOn>) =>
+  spy.mock.calls.map((c) => c.join(" ")).join("\n");
+
+describe("init — realtime-change subscription", () => {
+  it("re-runs addArcaLinks when the observer reports a realtime change", async () => {
+    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    await init();
+    addArcaLinks.mockClear();
+
+    const cb = onRealtimeChange.mock.calls[0]![0] as () => void;
+    cb();
+
+    expect(addArcaLinks).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs the skip reason when storage says disabled", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    getStorageState.mockResolvedValue({ enabled: false, targetSites: [] });
+    await init();
+    expect(logText(log)).toContain("비활성화 상태");
+    log.mockRestore();
+  });
+
+  it("logs startup when enabled", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    await init();
+    expect(logText(log)).toContain("익스텐션 시작");
+    log.mockRestore();
+  });
+});
+
+describe("setupStorageListener — toggle logging", () => {
+  it("logs BOTH sides of the enabled toggle", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const listener = setupStorageListener();
+
+    listener({ enabled: { newValue: true, oldValue: false } }, "local");
+    expect(logText(log)).toContain("활성화됨");
+
+    listener({ enabled: { newValue: false, oldValue: true } }, "local");
+    expect(logText(log)).toContain("비활성화됨");
+
+    log.mockRestore();
+  });
+});
+
+describe("bootstrap — DOMContentLoaded handler body", () => {
+  it("runs init() when the registered DOMContentLoaded handler fires", async () => {
+    Object.defineProperty(document, "readyState", {
+      value: "loading",
+      configurable: true,
+    });
+    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    const docAdd = vi.spyOn(document, "addEventListener");
+
+    bootstrap();
+    expect(addArcaLinks).not.toHaveBeenCalled(); // deferred, not immediate
+
+    const handler = docAdd.mock.calls.find(
+      (c) => c[0] === "DOMContentLoaded",
+    )![1] as EventListener;
+    handler(new Event("DOMContentLoaded"));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(addArcaLinks).toHaveBeenCalled();
+    docAdd.mockRestore();
+  });
+});
