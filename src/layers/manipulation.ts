@@ -11,6 +11,7 @@ import {
 import { REALTIME_SELECTORS } from "../constants/selectors";
 import type { ThreadMatch } from "../lib/arca-api";
 import type { KeywordChange } from "../types/common";
+import { attachPreview, hidePreviewIfDetached } from "./preview";
 
 // In-memory keyword→thread match map, refreshed from the background SW.
 export let threadMatches: Map<string, ThreadMatch | null> = new Map();
@@ -77,8 +78,9 @@ export function createThreadLink(
   if (match) {
     link.href = `${ARCA_BASE_URL}/${match.id}`;
     link.textContent = badgeText(match);
-    link.title = match.title;
+    link.setAttribute("aria-label", `아카라이브 토론글: ${match.title}`);
     link.setAttribute(DATA_ATTR_THREAD, "1");
+    attachPreview(link, match);
   } else {
     link.href = buildSearchUrl(ARCA_SEARCH_TEMPLATE, keyword) || ARCA_BASE_URL;
     link.textContent = "🔎";
@@ -166,6 +168,7 @@ export async function updateExistingLink(
   parentLi
     ?.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`)
     .forEach((c) => c.remove());
+  hidePreviewIfDetached();
 
   const container = createLinkContainer(
     newKeyword,
@@ -272,7 +275,10 @@ export async function addArcaLinks(): Promise<void> {
 
   let addedCount = 0;
   for (const { el, keyword, stale } of pending) {
-    if (stale) stale.remove();
+    if (stale) {
+      stale.remove();
+      hidePreviewIfDetached();
+    }
     el.setAttribute(DATA_ATTR_PROCESSED, "true");
     const container = createLinkContainer(
       keyword,

@@ -1,5 +1,6 @@
 import { LOG_PREFIX } from "./constants/config";
 import {
+  fetchArticlePreview,
   fetchNamuhotnowArticles,
   matchThread,
   type ThreadMatch,
@@ -24,31 +25,33 @@ export async function handleMatchThreads(
 // arca app API gates on the official-app User-Agent. fetch() cannot set
 // User-Agent from a service worker, so rewrite it via declarativeNetRequest.
 const ARCA_UA = "net.umanle.arca.android.playstore/0.9.83";
+const ARCA_UA_URL_FILTERS = [
+  "||arca.live/api/app/list/channel/namuhotnow",
+  "||arca.live/api/app/view/article/namuhotnow/",
+];
 function registerArcaUaRule(): void {
   chrome.declarativeNetRequest.updateSessionRules({
-    removeRuleIds: [1],
-    addRules: [
-      {
-        id: 1,
-        priority: 1,
-        action: {
-          type: "modifyHeaders" as chrome.declarativeNetRequest.RuleActionType,
-          requestHeaders: [
-            {
-              header: "user-agent",
-              operation: "set" as chrome.declarativeNetRequest.HeaderOperation,
-              value: ARCA_UA,
-            },
-          ],
-        },
-        condition: {
-          urlFilter: "||arca.live/api/app/list/channel/namuhotnow",
-          resourceTypes: [
-            "xmlhttprequest" as chrome.declarativeNetRequest.ResourceType,
-          ],
-        },
+    removeRuleIds: ARCA_UA_URL_FILTERS.map((_, i) => i + 1),
+    addRules: ARCA_UA_URL_FILTERS.map((urlFilter, i) => ({
+      id: i + 1,
+      priority: 1,
+      action: {
+        type: "modifyHeaders" as chrome.declarativeNetRequest.RuleActionType,
+        requestHeaders: [
+          {
+            header: "user-agent",
+            operation: "set" as chrome.declarativeNetRequest.HeaderOperation,
+            value: ARCA_UA,
+          },
+        ],
       },
-    ],
+      condition: {
+        urlFilter,
+        resourceTypes: [
+          "xmlhttprequest" as chrome.declarativeNetRequest.ResourceType,
+        ],
+      },
+    })),
   });
 }
 chrome.runtime.onInstalled.addListener(registerArcaUaRule);
@@ -67,6 +70,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         sendResponse({ matches: {} });
       });
     return true; // async sendResponse — keep the channel open
+  }
+  if (
+    msg &&
+    msg.type === "articlePreview" &&
+    Number.isInteger((msg as { id?: unknown }).id)
+  ) {
+    fetchArticlePreview((msg as { id: number }).id)
+      .then((text) => sendResponse({ text }))
+      .catch((e) => {
+        console.warn(`${LOG_PREFIX} articlePreview 처리 실패`, e);
+        sendResponse({ text: null });
+      });
+    return true;
   }
   return false;
 });

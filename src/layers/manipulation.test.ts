@@ -61,7 +61,10 @@ describe("createThreadLink", () => {
     expect(a.tagName).toBe("A");
     expect(a.href).toContain("/b/namuhotnow/555");
     expect(a.textContent).toBe("💬23");
-    expect(a.title).toBe("황승언");
+    // The hover preview replaces the native tooltip for matched threads.
+    expect(a.hasAttribute("title")).toBe(false);
+    expect(a.getAttribute("aria-label")).toBe("아카라이브 토론글: 황승언");
+    expect(a.getAttribute("aria-describedby")).toBe("arca-preview");
     expect(a.target).toBe("_blank");
     expect(a.rel).toBe("noopener noreferrer");
   });
@@ -564,6 +567,22 @@ describe("updateExistingLink", () => {
     const cs = li.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`);
     expect(cs.length).toBe(1);
     expect((cs[0] as HTMLElement).dataset["arcaKeyword"]).toBe("새키워드");
+  });
+
+  it("closes an open preview when its badge is swapped out", async () => {
+    document.body.innerHTML = `<ul><li><a id="a" href="/Go?q=x" title="옛키워드">옛키워드</a></li></ul>`;
+    const el = document.getElementById("a") as HTMLElement;
+    const li = el.closest("li") as HTMLElement;
+    li.appendChild(createLinkContainer("옛키워드", MATCH));
+    sendMessage.mockResolvedValue({ text: "본문" });
+    threadMatches.set("새키워드", null);
+    li.querySelector(".arca-link")!.dispatchEvent(new MouseEvent("mouseenter"));
+    const tip = document.getElementById("arca-preview")!;
+    expect(tip.hasAttribute("data-open")).toBe(true);
+
+    await updateExistingLink(el, "옛키워드", "새키워드");
+
+    expect(tip.hasAttribute("data-open")).toBe(false);
   });
 
   it("asks the SW for a match it has not seen before", async () => {

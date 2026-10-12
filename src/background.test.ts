@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const fetchNamuhotnowArticles = vi.fn();
 const matchThread = vi.fn();
+const fetchArticlePreview = vi.fn();
 vi.mock("./lib/arca-api", () => ({
+  fetchArticlePreview: (...a: unknown[]) => fetchArticlePreview(...a),
   fetchNamuhotnowArticles: (...a: unknown[]) => fetchNamuhotnowArticles(...a),
   matchThread: (...a: unknown[]) => matchThread(...a),
 }));
@@ -137,6 +139,60 @@ describe("onMessage listener", () => {
     });
   });
 
+  it("answers an articlePreview message with the article text", async () => {
+    fetchArticlePreview.mockResolvedValue("해명 방송을 진행했다.");
+    const sendResponse = vi.fn();
+
+    const keepAlive = messageListener()(
+      { type: "articlePreview", id: 555 },
+      {},
+      sendResponse,
+    );
+
+    expect(keepAlive).toBe(true);
+    expect(fetchArticlePreview).toHaveBeenCalledWith(555);
+    await settle();
+    expect(sendResponse).toHaveBeenCalledWith({
+      text: "해명 방송을 진행했다.",
+    });
+  });
+
+  it("passes a failed lookup on as null so the page does not cache it", async () => {
+    fetchArticlePreview.mockResolvedValue(null);
+    const sendResponse = vi.fn();
+    messageListener()({ type: "articlePreview", id: 2 }, {}, sendResponse);
+    await settle();
+    expect(sendResponse).toHaveBeenCalledWith({ text: null });
+  });
+
+  it.each([["555"], [1.5], [undefined]])(
+    "declines an articlePreview message whose id is %s",
+    (id) => {
+      fetchArticlePreview.mockClear();
+      const sendResponse = vi.fn();
+      const keepAlive = messageListener()(
+        { type: "articlePreview", id },
+        {},
+        sendResponse,
+      );
+      expect(keepAlive).toBe(false);
+      expect(fetchArticlePreview).not.toHaveBeenCalled();
+    },
+  );
+
+  it("answers with empty text when the preview lookup rejects", async () => {
+    fetchArticlePreview.mockRejectedValue(new Error("boom"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const sendResponse = vi.fn();
+
+    messageListener()({ type: "articlePreview", id: 1 }, {}, sendResponse);
+    await settle();
+
+    expect(sendResponse).toHaveBeenCalledWith({ text: null });
+    expect(warn.mock.calls[0]![0]).toContain("articlePreview 처리 실패");
+    warn.mockRestore();
+  });
+
   it("declines a message of a different type", () => {
     const sendResponse = vi.fn();
     expect(
@@ -213,8 +269,19 @@ describe("declarativeNetRequest User-Agent rule", () => {
 
     // The old rule must be cleared, otherwise updateSessionRules rejects on
     // the duplicate id the second time it runs.
-    expect(arg.removeRuleIds).toEqual([1]);
-    expect(arg.addRules).toHaveLength(1);
+    expect(arg.removeRuleIds).toEqual([1, 2]);
+    expect(arg.addRules).toHaveLength(2);
+    expect(arg.addRules.map((r) => r.id)).toEqual([1, 2]);
+    expect(arg.addRules.map((r) => r.condition.urlFilter)).toEqual([
+      "||arca.live/api/app/list/channel/namuhotnow",
+      "||arca.live/api/app/view/article/namuhotnow/",
+    ]);
+    for (const r of arg.addRules) {
+      expect(r.action.requestHeaders).toEqual([
+        { header: "user-agent", operation: "set", value: ARCA_UA },
+      ]);
+      expect(r.condition.resourceTypes).toEqual(["xmlhttprequest"]);
+    }
 
     const rule = arg.addRules[0]!;
     expect(rule.id).toBe(1);

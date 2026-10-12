@@ -114,6 +114,72 @@
   }
 }
 
+/* ── 토론글 미리보기 말풍선 (💬 배지 hover/focus) ──
+   실검 위젯이 행을 잘라내므로(overflow: hidden) body 에 하나만 두고 옮겨 쓴다. */
+.arca-preview {
+  position: fixed;
+  z-index: 2147483000;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    visibility 0.12s;
+  color: #212529;
+  background-color: #ffffff;
+  border: 1px solid #d0d7de;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+}
+
+.arca-preview[data-open] {
+  visibility: visible;
+  opacity: 1;
+}
+
+.arca-preview-meta {
+  font-size: 11px;
+  color: #5c6670;
+}
+
+.arca-preview-meta:empty {
+  display: none;
+}
+
+.arca-preview-title {
+  font-weight: 600;
+}
+
+.arca-preview-body {
+  margin-top: 4px;
+}
+
+.theseed-dark-mode .arca-preview {
+  color: #e6e6e9;
+  background-color: #22232a;
+  border-color: #3d3f4a;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.theseed-dark-mode .arca-preview-meta {
+  color: #a4a7b3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arca-preview {
+    transition: none;
+  }
+}
+
 /* ── 실검 인텔리전스 허브 패널 ── */
 .arca-hub {
   position: fixed;

@@ -1,9 +1,12 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   getDeviceToken,
   matchThread,
   fetchNamuhotnowArticles,
+  fetchArticlePreview,
+  htmlToText,
   _resetArcaCache,
+  _resetPreviewCache,
 } from "./arca-api";
 import type { ArcaArticle } from "./arca-api";
 
@@ -329,6 +332,119 @@ describe("getDeviceToken — storage contract", () => {
     expect(warnText(warn)).toContain("device-token 저장 실패");
     expect(warnText(warn)).toContain("QUOTA_BYTES exceeded");
 
+    warn.mockRestore();
+  });
+});
+
+describe("htmlToText", () => {
+  it("drops tags and collapses whitespace to one line", () => {
+    expect(
+      htmlToText("<p>가을 모기가</p>\n<p>  기승을 <b>부리며</b></p>"),
+    ).toBe("가을 모기가 기승을 부리며");
+  });
+  it("decodes named and numeric entities", () => {
+    expect(
+      htmlToText(
+        "A&nbsp;&amp;&nbsp;B &lt;tag&gt; &quot;q&quot; &#39;s&#x27; &#44032;",
+      ),
+    ).toBe("A & B <tag> \"q\" 's' 가");
+  });
+  it("does not double-decode an escaped entity", () => {
+    expect(htmlToText("&amp;lt;b&amp;gt;")).toBe("&lt;b&gt;");
+  });
+  it("leaves unknown or out-of-range references as written", () => {
+    expect(htmlToText("&bogus; &#0; &#x110000;")).toBe(
+      "&bogus; &#0; &#x110000;",
+    );
+  });
+  it("drops embedded media together with its fallback text", () => {
+    expect(
+      htmlToText(
+        '<p>볼넷으로 출루</p><VIDEO controls src="a.mp4">Your browser does not support HTML5 video.</video><p>배트를 던졌다</p><style>p{color:red}</style>',
+      ),
+    ).toBe("볼넷으로 출루 배트를 던졌다");
+  });
+  it("returns '' for a body with only markup", () => {
+    expect(htmlToText('<p><img src="x"></p>')).toBe("");
+  });
+});
+
+describe("fetchArticlePreview", () => {
+  beforeEach(() => {
+    _resetPreviewCache();
+    localGet.mockImplementation((_d, cb) =>
+      cb({ arcaDeviceToken: "t".repeat(64) }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubFetch(body: unknown, ok = true, status = 200) {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok, status, json: async () => body });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("requests the article view with the device token and returns its text", async () => {
+    const fetchMock = stubFetch({ content: "<p>해명 방송을 진행했다.</p>" });
+
+    expect(await fetchArticlePreview(555)).toBe("해명 방송을 진행했다.");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://arca.live/api/app/view/article/namuhotnow/555",
+      { headers: { "x-device-token": "t".repeat(64) } },
+    );
+  });
+
+  it("cuts a long body at 140 characters with an ellipsis", async () => {
+    stubFetch({ content: "가".repeat(139) + " 나다라" });
+    const text = await fetchArticlePreview(1);
+    expect(text).toBe("가".repeat(139) + "…");
+  });
+
+  it("keeps a body of exactly 140 characters whole", async () => {
+    stubFetch({ content: "가".repeat(140) });
+    expect(await fetchArticlePreview(1)).toBe("가".repeat(140));
+  });
+
+  it("counts by character, not UTF-16 unit, when cutting", async () => {
+    stubFetch({ content: "😀".repeat(141) });
+    expect(await fetchArticlePreview(1)).toBe("😀".repeat(140) + "…");
+  });
+
+  it("shows a notice instead of the body for a spoiler article", async () => {
+    stubFetch({ content: "<p>범인은</p>", isSpoilerAlert: true });
+    expect(await fetchArticlePreview(1)).toBe("스포일러 주의 글입니다.");
+  });
+
+  it("returns '' when the article has no content field", async () => {
+    stubFetch({});
+    expect(await fetchArticlePreview(1)).toBe("");
+  });
+
+  it("serves a repeated id from cache, including an empty result", async () => {
+    const fetchMock = stubFetch({ content: "" });
+    await fetchArticlePreview(7);
+    await fetchArticlePreview(7);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns null on a non-OK answer, names the status, and retries next time", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchMock = stubFetch({}, false, 403);
+
+    expect(await fetchArticlePreview(9)).toBeNull();
+    expect(String(warn.mock.calls[0]![1])).toContain("arca API 403");
+    await fetchArticlePreview(9);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+
+  it("returns null when the network call throws", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    expect(await fetchArticlePreview(3)).toBeNull();
+    expect(warn.mock.calls[0]![0]).toContain("arca 글 미리보기 실패");
     warn.mockRestore();
   });
 });
