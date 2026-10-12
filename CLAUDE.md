@@ -27,7 +27,7 @@ npm run deploy             # build + upload + publish to Chrome Web Store
 ## Source Layout
 
 - `src/content.ts` — content script injected into namu.wiki pages
-- `src/popup.ts` — extension UI (on/off toggle, detected keyword count)
+- `src/popup.ts` — extension UI (on/off toggle)
 - `src/background.ts` — service worker: arca.live app API lookups and title matching
 - `src/layers/` — DOM manipulation layers
 - `src/lib/` — shared utilities

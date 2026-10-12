@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   저장해도 아무 일도 일어나지 않는 설정 화면이었다. 옵션 페이지, 팝업의 "설정 (사이트 커스텀)"
   버튼, `chrome.storage.sync` 읽기를 걷어냈다. 예전에 저장된 `targetSites` 값은 지우지 않고 그대로
   두며 더 이상 읽지 않는다.
+- 팝업의 "감지된 검색어" 숫자. 그 값을 저장하는 코드가 없어서 항상 0 이었다.
 
 ### Security
 

@@ -126,27 +126,6 @@
       input:checked + .slider::before {
         transform: translateX(18px);
       }
-
-      .stats-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        background: var(--surface);
-        border-radius: 8px;
-        padding: 10px 14px;
-        margin-bottom: 12px;
-      }
-
-      .stats-label {
-        font-size: 12px;
-        color: var(--text-sub);
-      }
-
-      .stats-count {
-        font-size: 18px;
-        font-weight: 700;
-        color: var(--accent);
-      }
     </style>
   </head>
   <body>
@@ -163,11 +142,6 @@
         <input type="checkbox" id="toggle" checked />
         <span class="slider"></span>
       </label>
-    </div>
-
-    <div class="stats-row">
-      <span class="stats-label">감지된 검색어</span>
-      <span class="stats-count" id="keyword-count">0</span>
     </div>
 
     <script src="popup.js"></script>
