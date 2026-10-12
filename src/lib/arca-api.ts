@@ -137,26 +137,39 @@ export function _resetPreviewCache(): void {
   _previewCache.clear();
 }
 
-const ENTITIES: Record<string, string> = {
-  nbsp: " ",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  amp: "&",
-};
+const ENTITIES = new Map([
+  ["nbsp", " "],
+  ["lt", "<"],
+  ["gt", ">"],
+  ["quot", '"'],
+  ["apos", "'"],
+  ["amp", "&"],
+]);
+
+// Tags that end a line of text; every other tag is inline and leaves no gap
+// ("아<b>카라</b>이브" must stay one word).
+const BLOCK_TAGS = new Set(
+  "p div br li ul ol tr td th table h1 h2 h3 h4 h5 h6 blockquote pre hr figure figcaption img".split(
+    " ",
+  ),
+);
 
 /** Plain text of an article body: tags dropped, entities decoded, one line. */
 export function htmlToText(html: string): string {
   return html
+    .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(
       // embedded media carries fallback text ("Your browser does not support…")
       /<(video|audio|iframe|object|script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,
       " ",
     )
-    .replace(/<[^>]*>/g, " ")
+    .replace(
+      // quoted attribute values may contain ">"
+      /<\/?([a-z][a-z0-9]*)\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi,
+      (_tag, name: string) => (BLOCK_TAGS.has(name.toLowerCase()) ? " " : ""),
+    )
     .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, ref: string) => {
-      if (ref[0] !== "#") return ENTITIES[ref.toLowerCase()] ?? whole;
+      if (ref[0] !== "#") return ENTITIES.get(ref.toLowerCase()) ?? whole;
       const hex = ref[1] === "x" || ref[1] === "X";
       const code = parseInt(ref.slice(hex ? 2 : 1), hex ? 16 : 10);
       return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;

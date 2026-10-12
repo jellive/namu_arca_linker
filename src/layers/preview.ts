@@ -83,7 +83,7 @@ function place(anchor: HTMLElement): void {
     left = Math.max(GUTTER_PX, Math.min(rect.right - width, maxLeft));
     top = rect.bottom + GAP_PX;
     if (top + height > window.innerHeight - GUTTER_PX) {
-      top = rect.top - height - GAP_PX;
+      top = Math.max(GUTTER_PX, rect.top - height - GAP_PX);
     }
   }
   tip!.style.left = `${left}px`;
@@ -154,8 +154,18 @@ export function attachPreview(
   link.removeAttribute("title"); // the native tooltip would double up
   link.setAttribute("aria-describedby", PREVIEW_ID);
   const show = () => showPreview(link, match);
+  // Only the link that owns the tooltip may close it, and not by a pointer
+  // leaving while it still has keyboard focus.
+  const leave = () => {
+    if (currentAnchor === link && document.activeElement !== link) {
+      hidePreview();
+    }
+  };
+  const blur = () => {
+    if (currentAnchor === link) hidePreview();
+  };
   link.addEventListener("mouseenter", show);
   link.addEventListener("focus", show);
-  link.addEventListener("mouseleave", hidePreview);
-  link.addEventListener("blur", hidePreview);
+  link.addEventListener("mouseleave", leave);
+  link.addEventListener("blur", blur);
 }

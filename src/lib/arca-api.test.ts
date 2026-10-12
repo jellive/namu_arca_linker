@@ -364,6 +364,27 @@ describe("htmlToText", () => {
       ),
     ).toBe("볼넷으로 출루 배트를 던졌다");
   });
+  it("keeps a word whole across inline tags and breaks at block tags", () => {
+    expect(
+      htmlToText("<p>아<b>카라</b>이<span>브</span></p><p>둘째<br>줄</p>"),
+    ).toBe("아카라이브 둘째 줄");
+  });
+  it("does not end a tag at a '>' inside a quoted attribute", () => {
+    expect(htmlToText(`<p><a title="1 > 0" href='x>y'>정상 본문</a></p>`)).toBe(
+      "정상 본문",
+    );
+  });
+  it("drops HTML comments with their content", () => {
+    expect(htmlToText("<p>앞</p><!-- a > 비공개 --><p>뒤</p>")).toBe("앞 뒤");
+  });
+  it("leaves a reference named like an Object.prototype member alone", () => {
+    expect(htmlToText("&constructor; &toString;")).toBe(
+      "&constructor; &toString;",
+    );
+  });
+  it("leaves a bare '<' that does not start a tag", () => {
+    expect(htmlToText("3 < 5 이고 5 > 3")).toBe("3 < 5 이고 5 > 3");
+  });
   it("returns '' for a body with only markup", () => {
     expect(htmlToText('<p><img src="x"></p>')).toBe("");
   });

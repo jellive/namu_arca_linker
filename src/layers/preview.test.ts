@@ -322,6 +322,64 @@ describe("attachPreview", () => {
   });
 });
 
+describe("who may close the tooltip", () => {
+  it("stays open when the pointer leaves a link that still has focus", () => {
+    sendMessage.mockResolvedValue({ text: "t" });
+    const a = link();
+    a.href = "https://arca.live/";
+    attachPreview(a, MATCH);
+    a.focus();
+    a.dispatchEvent(new MouseEvent("mouseenter"));
+    a.dispatchEvent(new Event("mouseleave"));
+    expect(tip().hasAttribute("data-open")).toBe(true);
+    a.blur();
+    expect(tip().hasAttribute("data-open")).toBe(false);
+  });
+
+  it("is not closed by another link's mouseleave or blur", () => {
+    sendMessage.mockResolvedValue({ text: "t" });
+    const a = link();
+    const b = link();
+    attachPreview(a, MATCH);
+    attachPreview(b, { id: 777, title: "모기" });
+    a.dispatchEvent(new MouseEvent("mouseenter"));
+    b.dispatchEvent(new FocusEvent("focus"));
+    a.dispatchEvent(new Event("mouseleave"));
+    a.dispatchEvent(new Event("blur"));
+    expect(tip().hasAttribute("data-open")).toBe(true);
+    expect(part("title")).toBe("모기");
+  });
+});
+
+describe("short viewport", () => {
+  it("never places the tooltip above the top edge", () => {
+    sendMessage.mockResolvedValue({ text: "t" });
+    const a = link();
+    a.getBoundingClientRect = () =>
+      ({ left: 100, right: 140, top: 20, bottom: 40 }) as DOMRect;
+    Object.defineProperty(window, "innerWidth", {
+      value: 400,
+      configurable: true,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      value: 200,
+      configurable: true,
+    });
+    attachPreview(a, MATCH);
+    a.dispatchEvent(new MouseEvent("mouseenter"));
+    Object.defineProperty(tip(), "offsetWidth", {
+      value: 300,
+      configurable: true,
+    });
+    Object.defineProperty(tip(), "offsetHeight", {
+      value: 150,
+      configurable: true,
+    });
+    a.dispatchEvent(new MouseEvent("mouseenter"));
+    expect(tip().style.top).toBe("8px");
+  });
+});
+
 describe("same article on two links", () => {
   it("leaves the tooltip on the second link when the first answer lands", async () => {
     let resolveFirst: (v: { text: string }) => void = () => {};
