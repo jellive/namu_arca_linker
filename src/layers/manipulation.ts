@@ -161,6 +161,11 @@ export async function updateExistingLink(
   existing.style.opacity = "0";
   await new Promise<void>((r) => setTimeout(r, FADE_DURATION_MS));
   existing.remove();
+  // A full resync (addArcaLinks) may have replaced the stale container while
+  // we were fading; drop whatever is there so the row keeps a single link.
+  parentLi
+    ?.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`)
+    .forEach((c) => c.remove());
 
   const container = createLinkContainer(
     newKeyword,

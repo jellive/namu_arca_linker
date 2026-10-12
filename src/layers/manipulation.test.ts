@@ -550,6 +550,22 @@ describe("updateExistingLink", () => {
     expect(li.lastElementChild).toBe(c); // appended to the <li>, not spliced in
   });
 
+  it("leaves one container when a full resync lands during the fade", async () => {
+    // namu rotated the keyword in place: the anchor already shows the new one.
+    const { el, li } = seedLi("옛키워드");
+    el.setAttribute("href", "/Go?q=x");
+    el.setAttribute("title", "새키워드");
+    sendMessage.mockResolvedValue({ matches: {} });
+
+    const swap = updateExistingLink(el, "옛키워드", "새키워드"); // enters the fade
+    await addArcaLinks(); // heals the stale container while the fade is pending
+    await swap;
+
+    const cs = li.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`);
+    expect(cs.length).toBe(1);
+    expect((cs[0] as HTMLElement).dataset["arcaKeyword"]).toBe("새키워드");
+  });
+
   it("asks the SW for a match it has not seen before", async () => {
     sendMessage.mockResolvedValue({ matches: { 새키워드: MATCH } });
     const { el } = seedLi("옛키워드");
