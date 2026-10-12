@@ -50,21 +50,21 @@ afterEach(() => {
 
 describe("init — enabled gate", () => {
   it("early-returns without touching the DOM when storage says disabled", async () => {
-    getStorageState.mockResolvedValue({ enabled: false, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: false });
     await init();
     expect(addArcaLinks).not.toHaveBeenCalled();
     expect(observeRealtimeUpdates).not.toHaveBeenCalled();
   });
 
   it("runs addArcaLinks + observeRealtimeUpdates when enabled", async () => {
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     await init();
     expect(addArcaLinks).toHaveBeenCalledTimes(1);
     expect(observeRealtimeUpdates).toHaveBeenCalledTimes(1);
   });
 
   it("does not import or call any panel code (panel removed)", async () => {
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     await init();
     // addArcaLinks is the only DOM-mutating call now
     expect(addArcaLinks).toHaveBeenCalledTimes(1);
@@ -78,7 +78,7 @@ describe("init — enabled gate", () => {
     observeRealtimeUpdates.mockImplementation(() => {
       callOrder.push("observeRealtimeUpdates");
     });
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     await init();
     expect(callOrder).toEqual(["addArcaLinks", "observeRealtimeUpdates"]);
   });
@@ -90,7 +90,7 @@ describe("init — SPA navigation listener", () => {
     (window as unknown as { navigation: EventTarget }).navigation = {
       addEventListener: navAdd,
     } as unknown as EventTarget;
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
 
     await init();
 
@@ -100,7 +100,7 @@ describe("init — SPA navigation listener", () => {
 
   it("does NOT register a navigation listener when window.navigation is absent", async () => {
     // Default: window.navigation is unset (afterEach hooked).
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     await init();
     // No assertion needed beyond not throwing — guard is defensive.
     expect(addArcaLinks).toHaveBeenCalledTimes(1);
@@ -115,7 +115,7 @@ describe("init — SPA navigation listener", () => {
       }) as EventTarget["addEventListener"],
     } as unknown as EventTarget;
 
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     await init();
     addArcaLinks.mockClear();
 
@@ -180,7 +180,7 @@ describe("bootstrap — readyState dispatch", () => {
       value: "loading",
       configurable: true,
     });
-    getStorageState.mockResolvedValue({ enabled: false, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: false });
 
     bootstrap();
 
@@ -196,7 +196,7 @@ describe("bootstrap — readyState dispatch", () => {
       value: "complete",
       configurable: true,
     });
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
 
     bootstrap();
     // Wait the next microtask so init()'s promise chain runs.
@@ -217,7 +217,7 @@ const logText = (spy: ReturnType<typeof vi.spyOn>) =>
 
 describe("init — realtime-change subscription", () => {
   it("re-runs addArcaLinks when the observer reports a realtime change", async () => {
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     await init();
     addArcaLinks.mockClear();
 
@@ -229,7 +229,7 @@ describe("init — realtime-change subscription", () => {
 
   it("logs the skip reason when storage says disabled", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
-    getStorageState.mockResolvedValue({ enabled: false, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: false });
     await init();
     expect(logText(log)).toContain("비활성화 상태");
     log.mockRestore();
@@ -237,7 +237,7 @@ describe("init — realtime-change subscription", () => {
 
   it("logs startup when enabled", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     await init();
     expect(logText(log)).toContain("익스텐션 시작");
     log.mockRestore();
@@ -265,7 +265,7 @@ describe("bootstrap — DOMContentLoaded handler body", () => {
       value: "loading",
       configurable: true,
     });
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     const docAdd = vi.spyOn(document, "addEventListener");
 
     bootstrap();

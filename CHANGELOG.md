@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **옵션 페이지와 "대상 사이트 목록".** 1.5.0 에서 사이트별 링크 여러 개를 아카라이브 글 하나로
+  바로 가는 스마트 링크로 바꾼 뒤로, 옵션에서 저장한 사이트 목록을 읽는 코드가 없었다 — 고쳐
+  저장해도 아무 일도 일어나지 않는 설정 화면이었다. 옵션 페이지, 팝업의 "설정 (사이트 커스텀)"
+  버튼, `chrome.storage.sync` 읽기를 걷어냈다. 예전에 저장된 `targetSites` 값은 지우지 않고 그대로
+  두며 더 이상 읽지 않는다.
+
+### Security
+
+- 개발 의존성 권고 반영(brace-expansion, qs, fast-uri, source-map-js). 락파일만 바뀌었고 배포되는
+  확장 코드에는 들어가지 않는 패키지들이다.
+
 ## [1.5.4] - 2026-10-12
 
 ### Added

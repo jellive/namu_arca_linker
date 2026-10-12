@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 ## Tech Stack
 
 - **TypeScript + Vite** (build)
-- **Manifest V3** with `storage` permission only
+- **Manifest V3** — `storage`, `declarativeNetRequest`, host permissions for `namu.wiki` and `arca.live`
 - **Vitest** (unit), **Playwright** (e2e), **Stryker** (mutation testing)
 
 ## Commands
@@ -27,11 +27,11 @@ npm run deploy             # build + upload + publish to Chrome Web Store
 ## Source Layout
 
 - `src/content.ts` — content script injected into namu.wiki pages
-- `src/popup.ts`, `src/options.ts` — extension UI
+- `src/popup.ts` — extension UI (on/off toggle, detected keyword count)
+- `src/background.ts` — service worker: arca.live app API lookups and title matching
 - `src/layers/` — DOM manipulation layers
 - `src/lib/` — shared utilities
 - `src/types/` — shared types
-- `src/constants/sites.ts` — target site definitions
 
 ## Notes
 
