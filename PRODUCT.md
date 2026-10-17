@@ -71,12 +71,6 @@ UI·문서·커밋이 전부 한국어이고 i18n 이 없다 — 비한국어 �
   (스토어 신고 내용과 일치).
 - 콘텐츠 스크립트는 `https://namu.wiki/*` 에서만, `document_end`.
 
-### 정리 필요 — 사실로 취급하지 말 것
-
-- **`styles.css` 에 죽은 CSS 가 있다**: `.arca-hub` / `.arca-hub-toggle`(우측 도크형
-  "실검 인텔리전스 허브" 패널). CHANGELOG 상 **1.4.0 에 추가됐다가 1.5.0 에서 제거**된
-  기능의 잔재다. 살아있는 표면이 아니다.
-
 ## Brand Commitments
 
 **이름**: `나무위키 실검 아카라이브 링커`. 저장소·패키지명 `namu_arca_linker`.

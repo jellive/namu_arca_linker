@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   버튼, `chrome.storage.sync` 읽기를 걷어냈다. 예전에 저장된 `targetSites` 값은 지우지 않고 그대로
   두며 더 이상 읽지 않는다.
 - 팝업의 "감지된 검색어" 숫자. 그 값을 저장하는 코드가 없어서 항상 0 이었다.
+- `styles.css` 의 "실검 인텔리전스 허브" 패널 스타일(`.arca-hub*`). 1.5.0 에서 패널을 걷어낸 뒤
+  남아 있던 규칙이다.
+
+### Fixed
+
+- `package.json` 의 license 표기를 LICENSE 파일과 같은 MIT 로 맞췄다(ISC 로 적혀 있었다).
 
 ### Security
 
