@@ -867,7 +867,8 @@ describe("links enabled gate (popup toggle)", () => {
     el.closest("li")!.appendChild(createLinkContainer("옛키워드", null));
     threadMatches.set("새키워드", MATCH);
     const p = updateExistingLink(el, "옛키워드", "새키워드");
-    setLinksEnabled(false);
+    setLinksEnabled(false); // what the popup OFF does
+    removeArcaLinks();
     await p;
     expect(
       document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
@@ -896,6 +897,55 @@ describe("links enabled gate (popup toggle)", () => {
     expect(document.querySelectorAll(`[${DATA_ATTR_PROCESSED}]`).length).toBe(
       0,
     );
+  });
+
+  it("a lookup started before an OFF→ON cycle does not land its stale badge", async () => {
+    let resolveOld!: (v: unknown) => void;
+    let resolveNew!: (v: unknown) => void;
+    sendMessage
+      .mockReturnValueOnce(new Promise((r) => (resolveOld = r)))
+      .mockReturnValueOnce(new Promise((r) => (resolveNew = r)));
+    document.body.innerHTML =
+      '<ul><li><a href="/Go?q=B" title="B">B</a></li></ul>';
+    const stale = addArcaLinks(); // B lookup in flight
+    setLinksEnabled(false);
+    removeArcaLinks();
+    const a = document.querySelector('a[href^="/Go?q="]') as HTMLAnchorElement;
+    a.setAttribute("href", "/Go?q=C");
+    a.setAttribute("title", "C");
+    a.textContent = "C";
+    setLinksEnabled(true);
+    const fresh = addArcaLinks(); // the ON pass asks for C
+    resolveOld({ matches: { B: MATCH } }); // B answers first…
+    await stale;
+    resolveNew({ matches: { C: null } }); // …then C
+    await fresh;
+
+    const cs = document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`);
+    expect(cs.length).toBe(1);
+    expect((cs[0] as HTMLElement).dataset["arcaKeyword"]).toBe("C");
+  });
+
+  it("a fade started before an OFF→ON cycle leaves the fresh badge alone", async () => {
+    document.body.innerHTML = `<ul><li><a id="a" href="/Go?q=B" title="B">B</a></li></ul>`;
+    const el = document.getElementById("a") as HTMLElement;
+    const li = el.closest("li") as HTMLElement;
+    li.appendChild(createLinkContainer("A", null));
+    threadMatches.set("B", MATCH);
+    const fade = updateExistingLink(el, "A", "B"); // 200ms fade pending
+    setLinksEnabled(false);
+    removeArcaLinks();
+    el.setAttribute("href", "/Go?q=C");
+    el.setAttribute("title", "C");
+    el.textContent = "C";
+    setLinksEnabled(true);
+    sendMessage.mockResolvedValue({ matches: { C: null } });
+    await addArcaLinks(); // the ON pass paints C
+    await fade;
+
+    const cs = li.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`);
+    expect(cs.length).toBe(1);
+    expect((cs[0] as HTMLElement).dataset["arcaKeyword"]).toBe("C");
   });
 
   it("injects again once re-enabled", async () => {

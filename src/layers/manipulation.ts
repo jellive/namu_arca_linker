@@ -16,12 +16,19 @@ import { attachPreview, hidePreviewIfDetached } from "./preview";
 // In-memory keyword→thread match map, refreshed from the background SW.
 export let threadMatches: Map<string, ThreadMatch | null> = new Map();
 
-// Popup toggle gate. While off, nothing injects or asks the SW; it is checked
-// again after every await so an OFF that lands mid-request still wins.
+// Popup toggle gate. While off, nothing injects or asks the SW. Every toggle
+// bumps the cycle, and work re-checks it after each await, so a request or
+// fade begun before an OFF (even one followed by ON) never lands.
 let linksEnabled = true;
+let toggleCycle = 0;
 
 export function setLinksEnabled(enabled: boolean): void {
   linksEnabled = enabled;
+  toggleCycle++;
+}
+
+function stillCurrent(cycle: number): boolean {
+  return linksEnabled && cycle === toggleCycle;
 }
 
 interface MatchThreadsResponse {
@@ -137,8 +144,9 @@ export async function addNewLink(
   element: HTMLElement,
   keyword: string,
 ): Promise<void> {
+  const cycle = toggleCycle;
   if (!threadMatches.has(keyword)) await refreshThreadMatches([keyword]);
-  if (!linksEnabled) return;
+  if (!stillCurrent(cycle)) return;
   const container = createLinkContainer(
     keyword,
     threadMatches.get(keyword) ?? null,
@@ -153,6 +161,7 @@ export async function updateExistingLink(
   oldKeyword: string,
   newKeyword: string,
 ): Promise<void> {
+  const cycle = toggleCycle;
   console.log(`${LOG_PREFIX} 링크 업데이트: "${oldKeyword}" → "${newKeyword}"`);
   const parentLi = element.closest("li");
   const existing = parentLi
@@ -171,6 +180,9 @@ export async function updateExistingLink(
 
   existing.style.opacity = "0";
   await new Promise<void>((r) => setTimeout(r, FADE_DURATION_MS));
+  // Checked before touching the row: a toggle during the fade may already
+  // have painted a fresh badge here.
+  if (!stillCurrent(cycle)) return;
   existing.remove();
   // A full resync (addArcaLinks) may have replaced the stale container while
   // we were fading; drop whatever is there so the row keeps a single link.
@@ -178,7 +190,6 @@ export async function updateExistingLink(
     ?.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`)
     .forEach((c) => c.remove());
   hidePreviewIfDetached();
-  if (!linksEnabled) return;
 
   const container = createLinkContainer(
     newKeyword,
@@ -220,6 +231,7 @@ export async function updateArcaLink(change: KeywordChange): Promise<void> {
 /** Scan the DOM, match all keywords via the SW, inject one smart link each. */
 export async function addArcaLinks(): Promise<void> {
   if (!linksEnabled) return;
+  const cycle = toggleCycle;
   let realtimeItems: NodeListOf<Element> | Element[] = [];
   let usedSelector = "";
   for (const selector of REALTIME_SELECTORS) {
@@ -284,7 +296,7 @@ export async function addArcaLinks(): Promise<void> {
 
   // One SW round for all keywords needing (re)injection, then inject.
   await refreshThreadMatches(pending.map((p) => p.keyword));
-  if (!linksEnabled) return;
+  if (!stillCurrent(cycle)) return;
 
   let addedCount = 0;
   for (const { el, keyword, stale } of pending) {

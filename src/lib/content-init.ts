@@ -19,6 +19,7 @@ import { getStorageState } from "./storage";
 let watching = false;
 
 function startWatching(): void {
+  if (watching) return;
   watching = true;
   observeRealtimeUpdates();
   onRealtimeChange(() => {
@@ -69,7 +70,7 @@ export function setupStorageListener(): (
         console.log(`${LOG_PREFIX} 활성화됨 — 링크 추가`);
         setLinksEnabled(true);
         void addArcaLinks();
-        if (!watching) startWatching();
+        startWatching();
       } else {
         console.log(`${LOG_PREFIX} 비활성화됨`);
         setLinksEnabled(false);

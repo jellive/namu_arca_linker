@@ -24,11 +24,17 @@ vi.mock("./storage", () => ({
   getStorageState: () => getStorageState(),
 }));
 
-import { init, setupStorageListener, bootstrap } from "./content-init";
+// content-init remembers whether watching has started, so every test loads a
+// fresh copy of the module (the vi.mock factories above still apply).
+let init: typeof import("./content-init").init;
+let setupStorageListener: typeof import("./content-init").setupStorageListener;
+let bootstrap: typeof import("./content-init").bootstrap;
 
 const onChangedAdd = vi.fn();
 
-beforeEach(() => {
+beforeEach(async () => {
+  vi.resetModules();
+  ({ init, setupStorageListener, bootstrap } = await import("./content-init"));
   addArcaLinks.mockClear();
   setLinksEnabled.mockClear();
   removeArcaLinks.mockClear();
@@ -291,16 +297,8 @@ describe("bootstrap — DOMContentLoaded handler body", () => {
 });
 
 describe("popup toggle — OFF clears badges, ON resumes watching", () => {
-  // content-init remembers whether watching has started, so each test loads
-  // a fresh copy of the module (the vi.mock factories above still apply).
-  async function fresh() {
-    vi.resetModules();
-    return await import("./content-init");
-  }
-
   it("OFF closes the gate and strips existing badges", async () => {
-    const { setupStorageListener: listen } = await fresh();
-    const listener = listen();
+    const listener = setupStorageListener();
     listener({ enabled: { newValue: false, oldValue: true } }, "local");
     expect(setLinksEnabled).toHaveBeenCalledWith(false);
     expect(removeArcaLinks).toHaveBeenCalledTimes(1);
@@ -314,21 +312,19 @@ describe("popup toggle — OFF clears badges, ON resumes watching", () => {
     addArcaLinks.mockImplementation(async () => {
       callOrder.push("addArcaLinks");
     });
-    const { setupStorageListener: listen } = await fresh();
-    const listener = listen();
+    const listener = setupStorageListener();
     listener({ enabled: { newValue: true, oldValue: false } }, "local");
     expect(callOrder.slice(0, 2)).toEqual(["gate:true", "addArcaLinks"]);
     setLinksEnabled.mockReset();
   });
 
   it("a page opened while disabled starts watching once turned ON", async () => {
-    const mod = await fresh();
     getStorageState.mockResolvedValue({ enabled: false });
-    await mod.init();
+    await init();
     expect(setLinksEnabled).toHaveBeenCalledWith(false);
     expect(observeRealtimeUpdates).not.toHaveBeenCalled();
 
-    const listener = mod.setupStorageListener();
+    const listener = setupStorageListener();
     listener({ enabled: { newValue: true, oldValue: false } }, "local");
 
     expect(observeRealtimeUpdates).toHaveBeenCalledTimes(1);
@@ -336,13 +332,32 @@ describe("popup toggle — OFF clears badges, ON resumes watching", () => {
   });
 
   it("OFF then ON on a watched page does not start a second observer", async () => {
-    const mod = await fresh();
     getStorageState.mockResolvedValue({ enabled: true });
-    await mod.init();
-    const listener = mod.setupStorageListener();
+    await init();
+    const listener = setupStorageListener();
 
     listener({ enabled: { newValue: false, oldValue: true } }, "local");
     listener({ enabled: { newValue: true, oldValue: false } }, "local");
+
+    expect(observeRealtimeUpdates).toHaveBeenCalledTimes(1);
+    expect(onRealtimeChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("OFF then ON while the first paint is still in flight starts watching once", async () => {
+    let finishPaint!: () => void;
+    addArcaLinks.mockImplementationOnce(
+      () => new Promise<void>((r) => (finishPaint = r)),
+    );
+    getStorageState.mockResolvedValue({ enabled: true });
+    const booting = init();
+    await Promise.resolve();
+    await Promise.resolve(); // init is now parked on the first addArcaLinks
+
+    const listener = setupStorageListener();
+    listener({ enabled: { newValue: false, oldValue: true } }, "local");
+    listener({ enabled: { newValue: true, oldValue: false } }, "local");
+    finishPaint();
+    await booting;
 
     expect(observeRealtimeUpdates).toHaveBeenCalledTimes(1);
     expect(onRealtimeChange).toHaveBeenCalledTimes(1);
