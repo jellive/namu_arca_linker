@@ -1,5 +1,9 @@
 import { LOG_PREFIX, NAV_DELAY_MS } from "../constants/config";
-import { addArcaLinks } from "../layers/manipulation";
+import {
+  addArcaLinks,
+  removeArcaLinks,
+  setLinksEnabled,
+} from "../layers/manipulation";
 import { onRealtimeChange, observeRealtimeUpdates } from "../layers/observer";
 import { getStorageState } from "./storage";
 
@@ -10,17 +14,12 @@ import { getStorageState } from "./storage";
  * DOM listeners on import.
  */
 
-export async function init(): Promise<void> {
-  const { enabled } = await getStorageState();
+// Whether the observer and listeners are up. A page opened while disabled
+// starts them only when the popup turns the extension ON.
+let watching = false;
 
-  if (!enabled) {
-    console.log(`${LOG_PREFIX} 비활성화 상태 — 실행 건너뜀`);
-    return;
-  }
-
-  console.log(`${LOG_PREFIX} 익스텐션 시작`);
-
-  await addArcaLinks();
+function startWatching(): void {
+  watching = true;
   observeRealtimeUpdates();
   onRealtimeChange(() => {
     void addArcaLinks();
@@ -34,6 +33,21 @@ export async function init(): Promise<void> {
       }, NAV_DELAY_MS);
     });
   }
+}
+
+export async function init(): Promise<void> {
+  const { enabled } = await getStorageState();
+
+  if (!enabled) {
+    setLinksEnabled(false);
+    console.log(`${LOG_PREFIX} 비활성화 상태 — 실행 건너뜀`);
+    return;
+  }
+
+  console.log(`${LOG_PREFIX} 익스텐션 시작`);
+
+  await addArcaLinks();
+  startWatching();
 }
 
 /**
@@ -53,9 +67,13 @@ export function setupStorageListener(): (
       const newEnabled = changes["enabled"]?.newValue as boolean;
       if (newEnabled) {
         console.log(`${LOG_PREFIX} 활성화됨 — 링크 추가`);
-        addArcaLinks();
+        setLinksEnabled(true);
+        void addArcaLinks();
+        if (!watching) startWatching();
       } else {
         console.log(`${LOG_PREFIX} 비활성화됨`);
+        setLinksEnabled(false);
+        removeArcaLinks();
       }
     }
   };

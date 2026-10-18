@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **팝업에서 끄면 배지가 사라진다.** 전에는 꺼도 붙어 있던 배지가 그대로 남았고, 실검이 바뀌면
+  계속 새로 붙었다. 이제 끄는 즉시 배지를 걷어내고, 꺼진 동안에는 아카라이브 조회도 하지 않는다.
+- **꺼진 채로 연 페이지에서 켜면 실검 변화도 따라간다.** 전에는 켤 때 배지만 한 번 붙고 감시가
+  시작되지 않아, 그 뒤 바뀐 검색어에는 배지가 붙지 않았다.
 - `package.json` 의 license 표기를 LICENSE 파일과 같은 MIT 로 맞췄다(ISC 로 적혀 있었다).
 
 ### Security

@@ -4,12 +4,16 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 // the real modules never load. addArcaLinks() walks the live DOM in
 // production; we only care that it gets dispatched at the right times.
 const addArcaLinks = vi.fn().mockResolvedValue(undefined);
+const setLinksEnabled = vi.fn();
+const removeArcaLinks = vi.fn();
 const observeRealtimeUpdates = vi.fn();
 const onRealtimeChange = vi.fn();
 const getStorageState = vi.fn();
 
 vi.mock("../layers/manipulation", () => ({
   addArcaLinks: (...args: unknown[]) => addArcaLinks(...args),
+  setLinksEnabled: (...args: unknown[]) => setLinksEnabled(...args),
+  removeArcaLinks: (...args: unknown[]) => removeArcaLinks(...args),
 }));
 vi.mock("../layers/observer", () => ({
   observeRealtimeUpdates: (...args: unknown[]) =>
@@ -26,6 +30,8 @@ const onChangedAdd = vi.fn();
 
 beforeEach(() => {
   addArcaLinks.mockClear();
+  setLinksEnabled.mockClear();
+  removeArcaLinks.mockClear();
   observeRealtimeUpdates.mockClear();
   onRealtimeChange.mockClear();
   getStorageState.mockReset();
@@ -281,5 +287,64 @@ describe("bootstrap — DOMContentLoaded handler body", () => {
 
     expect(addArcaLinks).toHaveBeenCalled();
     docAdd.mockRestore();
+  });
+});
+
+describe("popup toggle — OFF clears badges, ON resumes watching", () => {
+  // content-init remembers whether watching has started, so each test loads
+  // a fresh copy of the module (the vi.mock factories above still apply).
+  async function fresh() {
+    vi.resetModules();
+    return await import("./content-init");
+  }
+
+  it("OFF closes the gate and strips existing badges", async () => {
+    const { setupStorageListener: listen } = await fresh();
+    const listener = listen();
+    listener({ enabled: { newValue: false, oldValue: true } }, "local");
+    expect(setLinksEnabled).toHaveBeenCalledWith(false);
+    expect(removeArcaLinks).toHaveBeenCalledTimes(1);
+  });
+
+  it("ON opens the gate before re-adding badges", async () => {
+    const callOrder: string[] = [];
+    setLinksEnabled.mockImplementation((v: boolean) => {
+      callOrder.push(`gate:${v}`);
+    });
+    addArcaLinks.mockImplementation(async () => {
+      callOrder.push("addArcaLinks");
+    });
+    const { setupStorageListener: listen } = await fresh();
+    const listener = listen();
+    listener({ enabled: { newValue: true, oldValue: false } }, "local");
+    expect(callOrder.slice(0, 2)).toEqual(["gate:true", "addArcaLinks"]);
+    setLinksEnabled.mockReset();
+  });
+
+  it("a page opened while disabled starts watching once turned ON", async () => {
+    const mod = await fresh();
+    getStorageState.mockResolvedValue({ enabled: false });
+    await mod.init();
+    expect(setLinksEnabled).toHaveBeenCalledWith(false);
+    expect(observeRealtimeUpdates).not.toHaveBeenCalled();
+
+    const listener = mod.setupStorageListener();
+    listener({ enabled: { newValue: true, oldValue: false } }, "local");
+
+    expect(observeRealtimeUpdates).toHaveBeenCalledTimes(1);
+    expect(onRealtimeChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("OFF then ON on a watched page does not start a second observer", async () => {
+    const mod = await fresh();
+    getStorageState.mockResolvedValue({ enabled: true });
+    await mod.init();
+    const listener = mod.setupStorageListener();
+
+    listener({ enabled: { newValue: false, oldValue: true } }, "local");
+    listener({ enabled: { newValue: true, oldValue: false } }, "local");
+
+    expect(observeRealtimeUpdates).toHaveBeenCalledTimes(1);
+    expect(onRealtimeChange).toHaveBeenCalledTimes(1);
   });
 });

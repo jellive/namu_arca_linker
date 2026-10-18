@@ -16,6 +16,14 @@ import { attachPreview, hidePreviewIfDetached } from "./preview";
 // In-memory keyword→thread match map, refreshed from the background SW.
 export let threadMatches: Map<string, ThreadMatch | null> = new Map();
 
+// Popup toggle gate. While off, nothing injects or asks the SW; it is checked
+// again after every await so an OFF that lands mid-request still wins.
+let linksEnabled = true;
+
+export function setLinksEnabled(enabled: boolean): void {
+  linksEnabled = enabled;
+}
+
 interface MatchThreadsResponse {
   matches: Record<string, ThreadMatch | null>;
 }
@@ -130,6 +138,7 @@ export async function addNewLink(
   keyword: string,
 ): Promise<void> {
   if (!threadMatches.has(keyword)) await refreshThreadMatches([keyword]);
+  if (!linksEnabled) return;
   const container = createLinkContainer(
     keyword,
     threadMatches.get(keyword) ?? null,
@@ -169,6 +178,7 @@ export async function updateExistingLink(
     ?.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`)
     .forEach((c) => c.remove());
   hidePreviewIfDetached();
+  if (!linksEnabled) return;
 
   const container = createLinkContainer(
     newKeyword,
@@ -184,6 +194,7 @@ export async function updateExistingLink(
 
 /** Apply a single keyword change to the DOM. */
 export async function updateArcaLink(change: KeywordChange): Promise<void> {
+  if (!linksEnabled) return;
   const { type, rank, oldKeyword, newKeyword, element } = change;
   if (!element) {
     console.warn(`${LOG_PREFIX} 순위 ${rank}의 요소를 찾을 수 없음`);
@@ -208,6 +219,7 @@ export async function updateArcaLink(change: KeywordChange): Promise<void> {
 
 /** Scan the DOM, match all keywords via the SW, inject one smart link each. */
 export async function addArcaLinks(): Promise<void> {
+  if (!linksEnabled) return;
   let realtimeItems: NodeListOf<Element> | Element[] = [];
   let usedSelector = "";
   for (const selector of REALTIME_SELECTORS) {
@@ -272,6 +284,7 @@ export async function addArcaLinks(): Promise<void> {
 
   // One SW round for all keywords needing (re)injection, then inject.
   await refreshThreadMatches(pending.map((p) => p.keyword));
+  if (!linksEnabled) return;
 
   let addedCount = 0;
   for (const { el, keyword, stale } of pending) {
@@ -289,4 +302,15 @@ export async function addArcaLinks(): Promise<void> {
   console.log(
     `${LOG_PREFIX} ${addedCount}개 링크 동기화 (선택자: ${usedSelector})`,
   );
+}
+
+/** Strip every injected badge (popup toggled OFF). */
+export function removeArcaLinks(): void {
+  document
+    .querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`)
+    .forEach((c) => c.remove());
+  document
+    .querySelectorAll(`[${DATA_ATTR_PROCESSED}]`)
+    .forEach((el) => el.removeAttribute(DATA_ATTR_PROCESSED));
+  hidePreviewIfDetached();
 }
