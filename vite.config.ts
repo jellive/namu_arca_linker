@@ -3,7 +3,7 @@ import { resolve } from "path";
 import { copyFileSync } from "fs";
 
 // Chrome MV3 content scripts run as CLASSIC scripts and CANNOT use ESM `import`.
-// popup.html/options.html also load their JS as classic <script src> tags, and
+// popup.html also loads its JS as a classic <script src> tag, and
 // the background service worker is registered as a classic worker (no type:module).
 // A single multi-entry ES build code-splits shared modules into a chunk that every
 // entry `import`s — which makes all bundles ESM and silently breaks them on load
@@ -39,12 +39,6 @@ export default defineConfig({
           copyFileSync(
             resolve(__dirname, "src/popup.html"),
             resolve(__dirname, "dist/popup.html"),
-          );
-        }
-        if (entry === "options") {
-          copyFileSync(
-            resolve(__dirname, "src/options.html"),
-            resolve(__dirname, "dist/options.html"),
           );
         }
       },

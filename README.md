@@ -1,250 +1,91 @@
 # 나무위키 실검 아카라이브 링커
 
-나무위키 실시간 검색어 옆에 아카라이브 링크를 자동으로 추가해주는 Chrome Extension입니다.
+나무위키 실시간 검색어가 **왜 떴는지**를 바로 보여 주는 Chrome 확장입니다.
+각 검색어 옆에 배지를 붙이고, 아카라이브 실검챈(`/b/namuhotnow`)에서 그 검색어를 설명하는 글을 찾아 연결합니다.
 
-## 📋 프로젝트 개요
+[Chrome 웹 스토어에서 설치](https://chromewebstore.google.com/detail/fhmagpkcdpcnmbihkgdcmabidcmdmpgl)
 
-- **타입**: Chrome Extension (Manifest V3)
-- **목적**: 나무위키 실시간 검색어에서 아카라이브로 빠르게 이동
+![미리보기 말풍선이 뜬 실시간 검색어 목록](docs/store-screenshots/01-preview-light.png)
 
-## 🎯 주요 기능
+## 하는 일
 
-- ✅ 나무위키 실시간 검색어 자동 감지
-- ✅ 각 검색어 옆에 아카라이브 링크 추가 (왜?)
-- ✅ **아카라이브 나무위키 실검 채널** (`/b/namuhotnow`)에서 해당 키워드 검색
-- ✅ 실검 갱신 시 자동으로 링크 업데이트
-- ✅ **실시간 검색어 변경 추적** (v1.1.0 NEW!)
-  - 검색어 추가/변경/삭제 자동 감지
-  - Fade 애니메이션으로 부드러운 링크 업데이트
-- ✅ 다크모드/라이트모드 지원
-- ✅ 반응형 디자인
+- **💬 배지** — 실검챈에 그 검색어를 다룬 글이 있으면 그 글로 바로 갑니다.
+- **🔎 배지** — 글을 못 찾았으면 실검챈 검색 결과로 갑니다.
+- **미리보기** — 💬 배지에 마우스를 올리거나 키보드로 포커스하면 글의 분류, 댓글 수, 작성 시각,
+  본문 앞부분(최대 140자)을 말풍선으로 보여 줍니다. 스포일러 표시 글은 본문 대신 안내 문구가 나옵니다.
+- 실검이 바뀌면 배지도 따라 바뀝니다.
+- 나무위키의 라이트/다크 테마를 따라갑니다.
+- 팝업에서 켜고 끌 수 있습니다.
 
-## 📦 설치 방법
+## 권한과 데이터
 
-### Chrome 웹스토어에서 설치 (출시 예정)
+| 권한 | 쓰는 곳 |
+|---|---|
+| `storage` | 켜기/끄기 값과 아카라이브 조회용 임의 기기 토큰을 브라우저 안에 저장 |
+| `declarativeNetRequest` | 아카라이브 실검챈 목록·글 조회 요청에만 필요한 헤더를 설정 |
+| `https://namu.wiki/*` | 실시간 검색어 목록을 읽고 배지를 붙임 |
+| `https://arca.live/*` | 실검챈 글 목록과, 미리보기를 연 글의 본문을 조회 |
 
-**현재 Chrome 웹스토어 제출 준비 중입니다!**
+수집하거나 외부로 보내는 개인정보는 없습니다. 자세한 내용은 [PRIVACY.md](PRIVACY.md)에 있습니다.
 
-출시 후 링크가 추가될 예정입니다.
+## 개발
 
-### 로컬에서 개발자 모드로 설치
+Node.js와 npm이 필요합니다.
 
-1. 이 저장소를 클론하거나 다운로드합니다.
-
-   ```bash
-   git clone https://github.com/[username]/namu_arca.git
-   cd namu_arca
-   ```
-
-2. Chrome 브라우저를 엽니다.
-
-3. 주소창에 `chrome://extensions/` 를 입력합니다.
-
-4. 우측 상단의 **"개발자 모드"** 를 활성화합니다.
-
-5. **"압축 해제된 확장 프로그램 로드"** 버튼을 클릭합니다.
-
-6. 다운로드한 프로젝트 폴더를 선택합니다.
-
-7. 익스텐션이 설치되었습니다! 🎉
-
-### 2. 아이콘 추가 (선택사항)
-
-`icons/` 폴더에 다음 크기의 아이콘을 추가하세요:
-
-- `icon16.png` - 16x16 픽셀
-- `icon48.png` - 48x48 픽셀
-- `icon128.png` - 128x128 픽셀
-
-아이콘 없이도 익스텐션은 정상 작동합니다.
-
-## 🚀 사용 방법
-
-1. [나무위키](https://namu.wiki) 메인 페이지에 접속합니다.
-
-2. 실시간 검색어 섹션을 확인합니다.
-
-3. 각 검색어 옆에 **왜?** 링크가 자동으로 추가됩니다.
-
-4. 링크를 클릭하면 아카라이브 나무위키 실검 채널(`/b/namuhotnow`)의 해당 키워드 검색 결과로 이동합니다.
-
-## 🛠️ 기술 스택
-
-- **JavaScript** (Vanilla)
-- **Chrome Extension API**
-  - Content Scripts
-  - MutationObserver
-- **CSS** (다크모드 지원)
-- **Manifest V3**
-
-## 📁 프로젝트 구조
-
-```
-namu_arca/
-├── manifest.json          # Chrome Extension 설정
-├── content.js            # 메인 로직 (DOM 조작, 링크 추가)
-├── styles.css            # 링크 스타일링
-├── icons/                # 아이콘 이미지 폴더
-│   └── README.md         # 아이콘 추가 안내
-└── README.md             # 프로젝트 설명
+```bash
+npm ci
+npm run build        # dist/ 에 content.js, background.js, popup.js, popup.html 생성
+npm run dev          # 변경을 감시하며 빌드 (content 스크립트)
 ```
 
-## 🔍 작동 원리
+빌드한 뒤 `chrome://extensions`에서 개발자 모드를 켜고 "압축해제된 확장 프로그램을 로드합니다"로
+이 폴더(저장소 루트)를 고르면 됩니다. `manifest.json`이 `dist/`를 가리킵니다.
 
-### 1. 실검 감지
-
-여러 CSS 선택자를 시도하여 나무위키의 실시간 검색어를 찾습니다:
-
-```javascript
-const REALTIME_SELECTORS = [
-  '[class*="realtime"] li a',
-  '[class*="trending"] li a',
-  '[class*="popular"] li a'
-  // ... 더 많은 선택자
-]
+```bash
+npm run test:run     # 단위 테스트 (Vitest + jsdom)
+npm run lint
+npm run format:check
+npm run test:mutation  # 변이 테스트 (Stryker) — 오래 걸립니다
 ```
 
-### 2. 아카라이브 링크 생성
+### 구조
 
-각 검색어에 대해 아카라이브 `/b/namuhotnow` 채널 검색 URL을 생성합니다:
-
-```javascript
-function getArcaSearchUrl(keyword) {
-  const encodedKeyword = encodeURIComponent(keyword)
-  return `https://arca.live/b/namuhotnow?target=all&keyword=${encodedKeyword}`
-}
+```
+manifest.json            Manifest V3
+styles.css               배지와 미리보기 말풍선 스타일 (나무위키 페이지에 주입)
+src/
+  content.ts             콘텐츠 스크립트 진입점
+  background.ts          서비스 워커 — 아카라이브 조회, 제목 매칭, 요청 헤더 규칙
+  popup.ts, popup.html   켜기/끄기 팝업
+  layers/
+    discovery.ts         실시간 검색어 목록 찾기
+    detection.ts         검색어 변경 감지
+    manipulation.ts      배지 붙이기와 갱신
+    observer.ts          페이지 변화 감시
+    preview.ts           미리보기 말풍선
+  lib/
+    arca-api.ts          아카라이브 앱 API 호출과 글 매칭
+    content-init.ts      콘텐츠 스크립트 시작과 켜기/끄기 반영
+    storage.ts           저장된 설정 읽기
+  constants/, types/
+e2e/                     Playwright 확장 로드 테스트
+scripts/                 릴리스 zip 생성, 스토어 상태 조회
 ```
 
-### 3. 동적 감지 및 변경 추적
+콘텐츠 스크립트·팝업·서비스 워커는 각각 독립된 IIFE 번들로 빌드합니다. MV3 콘텐츠 스크립트는
+ESM `import`를 쓸 수 없어서, 진입점마다 Vite를 한 번씩 돌립니다(`package.json`의 `build`).
 
-MutationObserver를 사용하여 실검 업데이트를 자동으로 감지합니다:
+### 릴리스
 
-```javascript
-const observer = new MutationObserver(mutations => {
-  childList: true,      // DOM 추가/제거 감지
-  attributes: true,     // 속성 변경 감지
-  attributeFilter: ['href'] // href 속성만 감시
-})
+```bash
+npm run release      # 테스트 → 린트 → 빌드 → release/ 에 zip
 ```
 
-### 4. 검색어 변경 감지 (v1.1.0 NEW!)
+스토어 업로드 절차는 [WEBSTORE_CLI_SETUP.md](WEBSTORE_CLI_SETUP.md), 등록 문구는
+[STORE_LISTING.md](STORE_LISTING.md), 변경 이력은 [CHANGELOG.md](CHANGELOG.md)에 있습니다.
 
-검색어가 변경되면 자동으로 감지하고 Diff 계산을 수행합니다:
+## 라이선스
 
-```javascript
-// 변경 타입: added, modified, removed
-const changes = detectKeywordChanges()
+[LICENSE](LICENSE)를 따릅니다.
 
-// 각 변경에 대해 링크 업데이트
-for (const change of changes) {
-  if (change.type === 'modified') {
-    // Fade-out (200ms) → 제거 → 생성 → Fade-in (200ms)
-    await updateExistingLink(element, oldKeyword, newKeyword)
-  }
-}
-```
-
-## 🧪 디버깅 및 테스트
-
-### 콘솔 로그 확인
-
-1. 나무위키 페이지에서 `F12`를 눌러 개발자 도구를 엽니다.
-
-2. **Console** 탭을 확인합니다.
-
-3. 다음과 같은 로그를 확인할 수 있습니다:
-   ```
-   [나무위키 아카링커] 익스텐션 시작
-   [나무위키 아카링커] 선택자 "..." 로 N개 항목 발견
-   [나무위키 아카링커] N개 항목에 링크 추가 완료
-   ```
-
-### 실검을 찾지 못하는 경우
-
-로그에 "실시간 검색어를 찾을 수 없습니다"가 표시되는 경우:
-
-1. 개발자 도구(F12)에서 **Elements** 탭을 엽니다.
-
-2. 실시간 검색어 섹션을 찾아 HTML 구조를 확인합니다.
-
-3. 정확한 클래스명이나 ID를 파악합니다.
-
-4. `content.js`의 `REALTIME_SELECTORS` 배열에 해당 선택자를 추가합니다:
-
-   ```javascript
-   const REALTIME_SELECTORS = [
-     // 기존 선택자들...
-     '.your-new-selector' // 여기에 추가
-   ]
-   ```
-
-5. 익스텐션을 새로고침합니다 (`chrome://extensions/`에서 🔄 버튼 클릭).
-
-## 🎨 커스터마이징
-
-### 링크 텍스트 변경
-
-`content.js`에서 링크 텍스트를 변경할 수 있습니다:
-
-```javascript
-arcaLink.textContent = '왜?' // 원하는 텍스트로 변경
-```
-
-### 스타일 변경
-
-`styles.css`에서 링크의 색상, 크기, 모양 등을 변경할 수 있습니다:
-
-```css
-.arca-link {
-  color: #0066cc; /* 색상 변경 */
-  font-size: 11px; /* 크기 변경 */
-  border-radius: 3px; /* 둥근 모서리 */
-  /* ... */
-}
-```
-
-### 아카라이브 채널 변경
-
-기본적으로 나무위키 실검 채널(`/b/namuhotnow`)로 연결됩니다.
-다른 채널로 변경하려면 `content.js`의 `getArcaSearchUrl` 함수를 수정하세요:
-
-```javascript
-function getArcaSearchUrl(keyword) {
-  const encodedKeyword = encodeURIComponent(keyword)
-  return `https://arca.live/b/your-channel?target=all&keyword=${encodedKeyword}` // 채널 변경
-}
-```
-
-## 🐛 알려진 이슈
-
-1. **실검을 찾지 못하는 경우**
-
-   - 나무위키 구조가 변경되었을 수 있습니다.
-   - 위의 "디버깅 및 테스트" 섹션을 참고하세요.
-
-2. **링크가 중복 생성되는 경우**
-   - 페이지를 새로고침하면 해결됩니다.
-   - 지속되는 경우 이슈를 제보해주세요.
-
-## 🤝 기여하기
-
-버그 제보, 기능 제안, Pull Request 모두 환영합니다!
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📞 문의
-
-프로젝트 링크: [https://github.com/jellive/namu_arca_linker](https://github.com/jellive/namu_arca_linker)
-
-## 🎉 감사의 말
-
-- [나무위키](https://namu.wiki) - 실시간 검색어 데이터 제공
-- [아카라이브](https://arca.live) - 커뮤니티 플랫폼
-
----
-
-#chrome-extension #side-project #namuwiki #arca-live #Jell
+나무위키, 아카라이브와는 무관한 개인 프로젝트입니다.

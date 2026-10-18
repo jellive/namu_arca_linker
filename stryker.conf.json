@@ -15,7 +15,6 @@
     "!src/constants/**",
     "!src/content.ts",
     "!src/popup.ts",
-    "!src/options.ts",
     "!src/types/**"
   ],
   "thresholds": {

@@ -28,43 +28,29 @@ beforeEach(() => {
 });
 
 describe("getStorageState — happy path", () => {
-  it("returns the default enabled=true + empty targetSites when nothing stored", async () => {
+  it("returns enabled=true when that is what storage holds", async () => {
     localGet.mockImplementation((_defaults, cb) => cb({ enabled: true }));
-    syncGet.mockImplementation((_defaults, cb) => cb({ targetSites: [] }));
     const state = await getStorageState();
-    expect(state.enabled).toBe(true);
-    expect(state.targetSites).toEqual([]);
+    expect(state).toEqual({ enabled: true });
   });
 
-  it("returns user-saved enabled=false + custom sites", async () => {
+  it("returns user-saved enabled=false", async () => {
     localGet.mockImplementation((_defaults, cb) => cb({ enabled: false }));
-    syncGet.mockImplementation((_defaults, cb) =>
-      cb({
-        targetSites: [
-          { name: "Custom", url: "https://example.com?q={keyword}" },
-        ],
-      }),
-    );
     const state = await getStorageState();
-    expect(state.enabled).toBe(false);
-    expect(state.targetSites).toHaveLength(1);
-    expect(state.targetSites[0]!.name).toBe("Custom");
+    expect(state).toEqual({ enabled: false });
   });
 
   it("queries chrome.storage.local for `enabled` (default true)", async () => {
     localGet.mockImplementation((_defaults, cb) => cb({ enabled: true }));
-    syncGet.mockImplementation((_defaults, cb) => cb({ targetSites: [] }));
     await getStorageState();
     expect(localGet).toHaveBeenCalledTimes(1);
     expect(localGet.mock.calls[0]![0]).toEqual({ enabled: true });
   });
 
-  it("queries chrome.storage.sync for `targetSites` (default [])", async () => {
+  it("does not read chrome.storage.sync", async () => {
     localGet.mockImplementation((_defaults, cb) => cb({ enabled: true }));
-    syncGet.mockImplementation((_defaults, cb) => cb({ targetSites: [] }));
     await getStorageState();
-    expect(syncGet).toHaveBeenCalledTimes(1);
-    expect(syncGet.mock.calls[0]![0]).toEqual({ targetSites: [] });
+    expect(syncGet).not.toHaveBeenCalled();
   });
 });
 
@@ -76,7 +62,6 @@ describe("getStorageState — error paths", () => {
       cb({ enabled: true });
       lastError = undefined;
     });
-    syncGet.mockImplementation((_defaults, cb) => cb({ targetSites: [] }));
     const state = await getStorageState();
     expect(state.enabled).toBe(true);
     expect(warn).toHaveBeenCalled();
@@ -86,38 +71,11 @@ describe("getStorageState — error paths", () => {
     warn.mockRestore();
   });
 
-  it("logs a warning when chrome.storage.sync read sets runtime.lastError but still resolves", async () => {
+  it("stays quiet when the read succeeds", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    localGet.mockImplementation((_defaults, cb) => cb({ enabled: false }));
-    syncGet.mockImplementation((_defaults, cb) => {
-      lastError = { message: "MAX_WRITE_OPERATIONS_PER_HOUR" };
-      cb({ targetSites: [] });
-      lastError = undefined;
-    });
-    const state = await getStorageState();
-    expect(state.enabled).toBe(false);
-    expect(warn).toHaveBeenCalled();
-    const logged = warn.mock.calls.flat().join(" ");
-    expect(logged).toContain("getStorageState(sync)");
-    warn.mockRestore();
-  });
-
-  it("logs warnings for BOTH layers when both fail (does not stop on first error)", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    localGet.mockImplementation((_defaults, cb) => {
-      lastError = { message: "local-broken" };
-      cb({ enabled: true });
-      lastError = undefined;
-    });
-    syncGet.mockImplementation((_defaults, cb) => {
-      lastError = { message: "sync-broken" };
-      cb({ targetSites: [] });
-      lastError = undefined;
-    });
+    localGet.mockImplementation((_defaults, cb) => cb({ enabled: true }));
     await getStorageState();
-    const callTexts = warn.mock.calls.map((args) => args.join(" "));
-    expect(callTexts.some((t) => t.includes("local-broken"))).toBe(true);
-    expect(callTexts.some((t) => t.includes("sync-broken"))).toBe(true);
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 
@@ -128,7 +86,6 @@ describe("getStorageState — error paths", () => {
       cb({ enabled: true });
       lastError = undefined;
     });
-    syncGet.mockImplementation((_defaults, cb) => cb({ targetSites: [] }));
-    await expect(getStorageState()).resolves.toBeDefined();
+    await expect(getStorageState()).resolves.toEqual({ enabled: true });
   });
 });

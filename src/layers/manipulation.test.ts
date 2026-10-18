@@ -9,6 +9,8 @@ import {
   addNewLink,
   updateExistingLink,
   updateArcaLink,
+  setLinksEnabled,
+  removeArcaLinks,
 } from "./manipulation";
 import {
   ARCA_BASE_URL,
@@ -26,6 +28,7 @@ beforeEach(() => {
   document.body.innerHTML = "";
   sendMessage.mockReset();
   threadMatches.clear();
+  setLinksEnabled(true);
   globalThis.chrome = {
     runtime: { sendMessage: (...a: unknown[]) => sendMessage(...a) },
   } as unknown as typeof chrome;
@@ -799,5 +802,161 @@ describe("addNewLink — match cache", () => {
     expect(
       document.querySelector(`.${CSS_CLASS_LINKS_CONTAINER} a`)!.textContent,
     ).toBe("💬23");
+  });
+});
+
+describe("links enabled gate (popup toggle)", () => {
+  const ROW = `<ul><li><a href="/Go?q=손흥민" title="손흥민">손흥민</a></li></ul>`;
+
+  it("addArcaLinks injects nothing and asks the SW nothing while disabled", async () => {
+    sendMessage.mockResolvedValue({ matches: { 손흥민: MATCH } });
+    document.body.innerHTML = ROW;
+    setLinksEnabled(false);
+    await addArcaLinks();
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(0);
+  });
+
+  it("addArcaLinks drops its result when disabled during the SW round", async () => {
+    let resolve!: (v: unknown) => void;
+    sendMessage.mockReturnValue(new Promise((r) => (resolve = r)));
+    document.body.innerHTML = ROW;
+    const p = addArcaLinks();
+    setLinksEnabled(false);
+    resolve({ matches: { 손흥민: MATCH } });
+    await p;
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(0);
+  });
+
+  it("updateArcaLink does nothing while disabled", async () => {
+    sendMessage.mockResolvedValue({ matches: { 새키워드: MATCH } });
+    document.body.innerHTML = '<ul><li><a id="a">target</a></li></ul>';
+    setLinksEnabled(false);
+    await updateArcaLink({
+      type: "added",
+      rank: 1,
+      newKeyword: "새키워드",
+      element: document.getElementById("a") as HTMLElement,
+    });
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(0);
+  });
+
+  it("addNewLink drops its insert when disabled during the SW round", async () => {
+    let resolve!: (v: unknown) => void;
+    sendMessage.mockReturnValue(new Promise((r) => (resolve = r)));
+    document.body.innerHTML = '<ul><li><a id="a">날씨</a></li></ul>';
+    const p = addNewLink(document.getElementById("a") as HTMLElement, "날씨");
+    setLinksEnabled(false);
+    resolve({ matches: { 날씨: null } });
+    await p;
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(0);
+  });
+
+  it("updateExistingLink does not swap a new badge in when disabled during the fade", async () => {
+    document.body.innerHTML = `<ul><li><a id="a" title="옛키워드">옛키워드</a></li></ul>`;
+    const el = document.getElementById("a") as HTMLElement;
+    el.closest("li")!.appendChild(createLinkContainer("옛키워드", null));
+    threadMatches.set("새키워드", MATCH);
+    const p = updateExistingLink(el, "옛키워드", "새키워드");
+    setLinksEnabled(false); // what the popup OFF does
+    removeArcaLinks();
+    await p;
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(0);
+  });
+
+  it("removeArcaLinks strips every badge and the processed marker", async () => {
+    sendMessage.mockResolvedValue({
+      matches: { 손흥민: MATCH, 비트코인: null },
+    });
+    document.body.innerHTML = `
+      <ul>
+        <li><a href="/Go?q=손흥민" title="손흥민">손흥민</a></li>
+        <li><a href="/Go?q=비트코인" title="비트코인">비트코인</a></li>
+      </ul>`;
+    await addArcaLinks();
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(2);
+
+    removeArcaLinks();
+
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(0);
+    expect(document.querySelectorAll(`[${DATA_ATTR_PROCESSED}]`).length).toBe(
+      0,
+    );
+  });
+
+  it("a lookup started before an OFF→ON cycle does not land its stale badge", async () => {
+    let resolveOld!: (v: unknown) => void;
+    let resolveNew!: (v: unknown) => void;
+    sendMessage
+      .mockReturnValueOnce(new Promise((r) => (resolveOld = r)))
+      .mockReturnValueOnce(new Promise((r) => (resolveNew = r)));
+    document.body.innerHTML =
+      '<ul><li><a href="/Go?q=B" title="B">B</a></li></ul>';
+    const stale = addArcaLinks(); // B lookup in flight
+    setLinksEnabled(false);
+    removeArcaLinks();
+    const a = document.querySelector('a[href^="/Go?q="]') as HTMLAnchorElement;
+    a.setAttribute("href", "/Go?q=C");
+    a.setAttribute("title", "C");
+    a.textContent = "C";
+    setLinksEnabled(true);
+    const fresh = addArcaLinks(); // the ON pass asks for C
+    resolveOld({ matches: { B: MATCH } }); // B answers first…
+    await stale;
+    resolveNew({ matches: { C: null } }); // …then C
+    await fresh;
+
+    const cs = document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`);
+    expect(cs.length).toBe(1);
+    expect((cs[0] as HTMLElement).dataset["arcaKeyword"]).toBe("C");
+  });
+
+  it("a fade started before an OFF→ON cycle leaves the fresh badge alone", async () => {
+    document.body.innerHTML = `<ul><li><a id="a" href="/Go?q=B" title="B">B</a></li></ul>`;
+    const el = document.getElementById("a") as HTMLElement;
+    const li = el.closest("li") as HTMLElement;
+    li.appendChild(createLinkContainer("A", null));
+    threadMatches.set("B", MATCH);
+    const fade = updateExistingLink(el, "A", "B"); // 200ms fade pending
+    setLinksEnabled(false);
+    removeArcaLinks();
+    el.setAttribute("href", "/Go?q=C");
+    el.setAttribute("title", "C");
+    el.textContent = "C";
+    setLinksEnabled(true);
+    sendMessage.mockResolvedValue({ matches: { C: null } });
+    await addArcaLinks(); // the ON pass paints C
+    await fade;
+
+    const cs = li.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`);
+    expect(cs.length).toBe(1);
+    expect((cs[0] as HTMLElement).dataset["arcaKeyword"]).toBe("C");
+  });
+
+  it("injects again once re-enabled", async () => {
+    sendMessage.mockResolvedValue({ matches: { 손흥민: MATCH } });
+    document.body.innerHTML = ROW;
+    setLinksEnabled(false);
+    await addArcaLinks();
+    setLinksEnabled(true);
+    await addArcaLinks();
+    expect(
+      document.querySelectorAll(`.${CSS_CLASS_LINKS_CONTAINER}`).length,
+    ).toBe(1);
   });
 });

@@ -4,12 +4,16 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 // the real modules never load. addArcaLinks() walks the live DOM in
 // production; we only care that it gets dispatched at the right times.
 const addArcaLinks = vi.fn().mockResolvedValue(undefined);
+const setLinksEnabled = vi.fn();
+const removeArcaLinks = vi.fn();
 const observeRealtimeUpdates = vi.fn();
 const onRealtimeChange = vi.fn();
 const getStorageState = vi.fn();
 
 vi.mock("../layers/manipulation", () => ({
   addArcaLinks: (...args: unknown[]) => addArcaLinks(...args),
+  setLinksEnabled: (...args: unknown[]) => setLinksEnabled(...args),
+  removeArcaLinks: (...args: unknown[]) => removeArcaLinks(...args),
 }));
 vi.mock("../layers/observer", () => ({
   observeRealtimeUpdates: (...args: unknown[]) =>
@@ -20,12 +24,20 @@ vi.mock("./storage", () => ({
   getStorageState: () => getStorageState(),
 }));
 
-import { init, setupStorageListener, bootstrap } from "./content-init";
+// content-init remembers whether watching has started, so every test loads a
+// fresh copy of the module (the vi.mock factories above still apply).
+let init: typeof import("./content-init").init;
+let setupStorageListener: typeof import("./content-init").setupStorageListener;
+let bootstrap: typeof import("./content-init").bootstrap;
 
 const onChangedAdd = vi.fn();
 
-beforeEach(() => {
+beforeEach(async () => {
+  vi.resetModules();
+  ({ init, setupStorageListener, bootstrap } = await import("./content-init"));
   addArcaLinks.mockClear();
+  setLinksEnabled.mockClear();
+  removeArcaLinks.mockClear();
   observeRealtimeUpdates.mockClear();
   onRealtimeChange.mockClear();
   getStorageState.mockReset();
@@ -50,21 +62,21 @@ afterEach(() => {
 
 describe("init — enabled gate", () => {
   it("early-returns without touching the DOM when storage says disabled", async () => {
-    getStorageState.mockResolvedValue({ enabled: false, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: false });
     await init();
     expect(addArcaLinks).not.toHaveBeenCalled();
     expect(observeRealtimeUpdates).not.toHaveBeenCalled();
   });
 
   it("runs addArcaLinks + observeRealtimeUpdates when enabled", async () => {
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     await init();
     expect(addArcaLinks).toHaveBeenCalledTimes(1);
     expect(observeRealtimeUpdates).toHaveBeenCalledTimes(1);
   });
 
   it("does not import or call any panel code (panel removed)", async () => {
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     await init();
     // addArcaLinks is the only DOM-mutating call now
     expect(addArcaLinks).toHaveBeenCalledTimes(1);
@@ -78,7 +90,7 @@ describe("init — enabled gate", () => {
     observeRealtimeUpdates.mockImplementation(() => {
       callOrder.push("observeRealtimeUpdates");
     });
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     await init();
     expect(callOrder).toEqual(["addArcaLinks", "observeRealtimeUpdates"]);
   });
@@ -90,7 +102,7 @@ describe("init — SPA navigation listener", () => {
     (window as unknown as { navigation: EventTarget }).navigation = {
       addEventListener: navAdd,
     } as unknown as EventTarget;
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
 
     await init();
 
@@ -100,7 +112,7 @@ describe("init — SPA navigation listener", () => {
 
   it("does NOT register a navigation listener when window.navigation is absent", async () => {
     // Default: window.navigation is unset (afterEach hooked).
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     await init();
     // No assertion needed beyond not throwing — guard is defensive.
     expect(addArcaLinks).toHaveBeenCalledTimes(1);
@@ -115,7 +127,7 @@ describe("init — SPA navigation listener", () => {
       }) as EventTarget["addEventListener"],
     } as unknown as EventTarget;
 
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     await init();
     addArcaLinks.mockClear();
 
@@ -180,7 +192,7 @@ describe("bootstrap — readyState dispatch", () => {
       value: "loading",
       configurable: true,
     });
-    getStorageState.mockResolvedValue({ enabled: false, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: false });
 
     bootstrap();
 
@@ -196,7 +208,7 @@ describe("bootstrap — readyState dispatch", () => {
       value: "complete",
       configurable: true,
     });
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
 
     bootstrap();
     // Wait the next microtask so init()'s promise chain runs.
@@ -217,7 +229,7 @@ const logText = (spy: ReturnType<typeof vi.spyOn>) =>
 
 describe("init — realtime-change subscription", () => {
   it("re-runs addArcaLinks when the observer reports a realtime change", async () => {
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     await init();
     addArcaLinks.mockClear();
 
@@ -229,7 +241,7 @@ describe("init — realtime-change subscription", () => {
 
   it("logs the skip reason when storage says disabled", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
-    getStorageState.mockResolvedValue({ enabled: false, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: false });
     await init();
     expect(logText(log)).toContain("비활성화 상태");
     log.mockRestore();
@@ -237,7 +249,7 @@ describe("init — realtime-change subscription", () => {
 
   it("logs startup when enabled", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     await init();
     expect(logText(log)).toContain("익스텐션 시작");
     log.mockRestore();
@@ -265,7 +277,7 @@ describe("bootstrap — DOMContentLoaded handler body", () => {
       value: "loading",
       configurable: true,
     });
-    getStorageState.mockResolvedValue({ enabled: true, targetSites: [] });
+    getStorageState.mockResolvedValue({ enabled: true });
     const docAdd = vi.spyOn(document, "addEventListener");
 
     bootstrap();
@@ -281,5 +293,73 @@ describe("bootstrap — DOMContentLoaded handler body", () => {
 
     expect(addArcaLinks).toHaveBeenCalled();
     docAdd.mockRestore();
+  });
+});
+
+describe("popup toggle — OFF clears badges, ON resumes watching", () => {
+  it("OFF closes the gate and strips existing badges", async () => {
+    const listener = setupStorageListener();
+    listener({ enabled: { newValue: false, oldValue: true } }, "local");
+    expect(setLinksEnabled).toHaveBeenCalledWith(false);
+    expect(removeArcaLinks).toHaveBeenCalledTimes(1);
+  });
+
+  it("ON opens the gate before re-adding badges", async () => {
+    const callOrder: string[] = [];
+    setLinksEnabled.mockImplementation((v: boolean) => {
+      callOrder.push(`gate:${v}`);
+    });
+    addArcaLinks.mockImplementation(async () => {
+      callOrder.push("addArcaLinks");
+    });
+    const listener = setupStorageListener();
+    listener({ enabled: { newValue: true, oldValue: false } }, "local");
+    expect(callOrder.slice(0, 2)).toEqual(["gate:true", "addArcaLinks"]);
+    setLinksEnabled.mockReset();
+  });
+
+  it("a page opened while disabled starts watching once turned ON", async () => {
+    getStorageState.mockResolvedValue({ enabled: false });
+    await init();
+    expect(setLinksEnabled).toHaveBeenCalledWith(false);
+    expect(observeRealtimeUpdates).not.toHaveBeenCalled();
+
+    const listener = setupStorageListener();
+    listener({ enabled: { newValue: true, oldValue: false } }, "local");
+
+    expect(observeRealtimeUpdates).toHaveBeenCalledTimes(1);
+    expect(onRealtimeChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("OFF then ON on a watched page does not start a second observer", async () => {
+    getStorageState.mockResolvedValue({ enabled: true });
+    await init();
+    const listener = setupStorageListener();
+
+    listener({ enabled: { newValue: false, oldValue: true } }, "local");
+    listener({ enabled: { newValue: true, oldValue: false } }, "local");
+
+    expect(observeRealtimeUpdates).toHaveBeenCalledTimes(1);
+    expect(onRealtimeChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("OFF then ON while the first paint is still in flight starts watching once", async () => {
+    let finishPaint!: () => void;
+    addArcaLinks.mockImplementationOnce(
+      () => new Promise<void>((r) => (finishPaint = r)),
+    );
+    getStorageState.mockResolvedValue({ enabled: true });
+    const booting = init();
+    await Promise.resolve();
+    await Promise.resolve(); // init is now parked on the first addArcaLinks
+
+    const listener = setupStorageListener();
+    listener({ enabled: { newValue: false, oldValue: true } }, "local");
+    listener({ enabled: { newValue: true, oldValue: false } }, "local");
+    finishPaint();
+    await booting;
+
+    expect(observeRealtimeUpdates).toHaveBeenCalledTimes(1);
+    expect(onRealtimeChange).toHaveBeenCalledTimes(1);
   });
 });
