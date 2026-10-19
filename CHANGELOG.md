@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.5] - 2026-10-19
+
 ### Removed
 
 - **옵션 페이지와 "대상 사이트 목록".** 1.5.0 에서 사이트별 링크 여러 개를 아카라이브 글 하나로
