@@ -65,6 +65,23 @@ function registerArcaUaRule(): void {
 chrome.runtime.onInstalled.addListener(registerArcaUaRule);
 chrome.runtime.onStartup.addListener(registerArcaUaRule);
 
+/**
+ * The popup's ON/OFF flag (default ON). Read here so that OFF stops arca.live
+ * lookups even when a stale content-script listener still asks — CHANGELOG
+ * promises no lookups while OFF. An unreadable setting keeps today's behavior.
+ */
+function isEnabled(): Promise<boolean> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get({ enabled: true }, (local) => {
+      if (chrome.runtime.lastError || !local) {
+        resolve(true);
+        return;
+      }
+      resolve(Boolean(local["enabled"]));
+    });
+  });
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (
     msg &&
@@ -75,7 +92,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     const keywords = (msg as { keywords: unknown[] }).keywords.filter(
       (k): k is string => typeof k === "string" && k !== "",
     );
-    handleMatchThreads(keywords)
+    isEnabled()
+      .then((on) =>
+        on ? handleMatchThreads(keywords) : { matches: Object.create(null) },
+      )
       .then(sendResponse)
       .catch((e) => {
         console.warn(`${LOG_PREFIX} matchThreads 처리 실패`, e);
@@ -88,7 +108,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     msg.type === "articlePreview" &&
     isArticleId((msg as { id?: unknown }).id)
   ) {
-    fetchArticlePreview((msg as { id: number }).id)
+    const id = (msg as { id: number }).id;
+    isEnabled()
+      .then((on) => (on ? fetchArticlePreview(id) : null))
       .then((text) => sendResponse({ text }))
       .catch((e) => {
         console.warn(`${LOG_PREFIX} articlePreview 처리 실패`, e);

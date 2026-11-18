@@ -18,6 +18,7 @@ const {
   onInstalledAdd,
   onStartupAdd,
   updateSessionRules,
+  storageGet,
   importLogs,
   restoreLog,
 } = vi.hoisted(() => {
@@ -25,6 +26,7 @@ const {
   const onInstalledAdd = vi.fn();
   const onStartupAdd = vi.fn();
   const updateSessionRules = vi.fn();
+  const storageGet = vi.fn();
   const importLogs: string[] = [];
   const originalLog = console.log;
   console.log = (...args: unknown[]) => {
@@ -42,12 +44,14 @@ const {
     declarativeNetRequest: {
       updateSessionRules,
     },
+    storage: { local: { get: storageGet } },
   } as unknown as typeof chrome;
   return {
     addListener,
     onInstalledAdd,
     onStartupAdd,
     updateSessionRules,
+    storageGet,
     importLogs,
     restoreLog,
   };
@@ -77,6 +81,10 @@ beforeEach(() => {
   fetchNamuhotnowArticles.mockReset();
   matchThread.mockReset();
   updateSessionRules.mockReset();
+  storageGet.mockReset();
+  storageGet.mockImplementation((_d: unknown, cb: (v: unknown) => void) =>
+    cb({ enabled: true }),
+  );
 });
 
 describe("handleMatchThreads", () => {
@@ -150,8 +158,8 @@ describe("onMessage listener", () => {
     );
 
     expect(keepAlive).toBe(true);
-    expect(fetchArticlePreview).toHaveBeenCalledWith(555);
     await settle();
+    expect(fetchArticlePreview).toHaveBeenCalledWith(555);
     expect(sendResponse).toHaveBeenCalledWith({
       text: "해명 방송을 진행했다.",
     });
@@ -359,4 +367,52 @@ describe("message contract", () => {
       expect(fetchArticlePreview).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("popup OFF", () => {
+  function off() {
+    storageGet.mockImplementation((_d: unknown, cb: (v: unknown) => void) =>
+      cb({ enabled: false }),
+    );
+  }
+
+  it("answers matchThreads with no matches and no lookup while OFF", async () => {
+    off();
+    const sendResponse = vi.fn();
+    expect(
+      messageListener()(
+        { type: "matchThreads", keywords: ["a"] },
+        {},
+        sendResponse,
+      ),
+    ).toBe(true);
+    await settle();
+    expect(fetchNamuhotnowArticles).not.toHaveBeenCalled();
+    expect(sendResponse).toHaveBeenCalledWith({ matches: {} });
+  });
+
+  it("answers articlePreview with null and no lookup while OFF", async () => {
+    off();
+    fetchArticlePreview.mockClear();
+    const sendResponse = vi.fn();
+    expect(
+      messageListener()({ type: "articlePreview", id: 5 }, {}, sendResponse),
+    ).toBe(true);
+    await settle();
+    expect(fetchArticlePreview).not.toHaveBeenCalled();
+    expect(sendResponse).toHaveBeenCalledWith({ text: null });
+  });
+
+  it("treats an unreadable setting as ON, today's behavior", async () => {
+    storageGet.mockImplementation((_d: unknown, cb: (v: unknown) => void) =>
+      cb(undefined),
+    );
+    fetchArticlePreview.mockClear();
+    fetchArticlePreview.mockResolvedValue("t");
+    const sendResponse = vi.fn();
+    messageListener()({ type: "articlePreview", id: 5 }, {}, sendResponse);
+    await settle();
+    expect(fetchArticlePreview).toHaveBeenCalledWith(5);
+    expect(sendResponse).toHaveBeenCalledWith({ text: "t" });
+  });
 });
