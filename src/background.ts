@@ -14,12 +14,20 @@ export interface MatchThreadsResponse {
 export async function handleMatchThreads(
   keywords: string[],
 ): Promise<MatchThreadsResponse> {
+  // Null prototype: a keyword such as "__proto__" must become its own entry
+  // instead of rewriting the object's prototype.
+  const matches: Record<string, ThreadMatch | null> = Object.create(null);
+  if (keywords.length === 0) return { matches };
   const articles = await fetchNamuhotnowArticles();
-  const matches: Record<string, ThreadMatch | null> = {};
   for (const kw of keywords) {
     matches[kw] = matchThread(kw, articles);
   }
   return { matches };
+}
+
+/** Article ids become a URL path segment: positive safe integers only. */
+function isArticleId(id: unknown): id is number {
+  return typeof id === "number" && Number.isSafeInteger(id) && id > 0;
 }
 
 // arca app API gates on the official-app User-Agent. fetch() cannot set
@@ -63,7 +71,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     msg.type === "matchThreads" &&
     Array.isArray((msg as { keywords?: unknown }).keywords)
   ) {
-    handleMatchThreads((msg as { keywords: string[] }).keywords)
+    // Non-string or empty entries are dropped rather than failing the batch.
+    const keywords = (msg as { keywords: unknown[] }).keywords.filter(
+      (k): k is string => typeof k === "string" && k !== "",
+    );
+    handleMatchThreads(keywords)
       .then(sendResponse)
       .catch((e) => {
         console.warn(`${LOG_PREFIX} matchThreads 처리 실패`, e);
@@ -74,7 +86,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (
     msg &&
     msg.type === "articlePreview" &&
-    Number.isInteger((msg as { id?: unknown }).id)
+    isArticleId((msg as { id?: unknown }).id)
   ) {
     fetchArticlePreview((msg as { id: number }).id)
       .then((text) => sendResponse({ text }))

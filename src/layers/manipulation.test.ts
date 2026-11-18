@@ -960,3 +960,20 @@ describe("links enabled gate (popup toggle)", () => {
     ).toBe(1);
   });
 });
+
+describe("refreshThreadMatches — reply keys", () => {
+  it("does not read inherited properties of the reply as matches", async () => {
+    sendMessage.mockResolvedValue({ matches: {} });
+    await refreshThreadMatches(["constructor", "toString"]);
+    expect(threadMatches.get("constructor")).toBeNull();
+    expect(threadMatches.get("toString")).toBeNull();
+  });
+
+  it("reads an own `__proto__` entry from a JSON reply", async () => {
+    sendMessage.mockResolvedValue(
+      JSON.parse(`{"matches":{"__proto__":${JSON.stringify(MATCH)}}}`),
+    );
+    await refreshThreadMatches(["__proto__"]);
+    expect(threadMatches.get("__proto__")).toEqual(MATCH);
+  });
+});

@@ -310,3 +310,53 @@ describe("declarativeNetRequest User-Agent rule", () => {
     expect(arg.addRules[0]!.condition.urlFilter).toContain("namuhotnow");
   });
 });
+
+describe("message contract", () => {
+  it("keeps a `__proto__` keyword as its own result", async () => {
+    fetchNamuhotnowArticles.mockResolvedValue([
+      { id: 1, title: "__proto__", createdAt: "c" },
+    ]);
+    matchThread.mockImplementation((kw: string) =>
+      kw === "__proto__" ? { id: 1, title: "__proto__" } : null,
+    );
+    const res = await handleMatchThreads(["__proto__"]);
+    expect(Object.prototype.hasOwnProperty.call(res.matches, "__proto__")).toBe(
+      true,
+    );
+    expect(res.matches["__proto__"]).toEqual({ id: 1, title: "__proto__" });
+  });
+
+  it("does not fetch the list for an empty keyword batch", async () => {
+    const res = await handleMatchThreads([]);
+    expect(fetchNamuhotnowArticles).not.toHaveBeenCalled();
+    expect(Object.keys(res.matches)).toEqual([]);
+  });
+
+  it("drops non-string and empty keywords instead of letting them fail the batch", async () => {
+    fetchNamuhotnowArticles.mockResolvedValue([]);
+    matchThread.mockReturnValue(null);
+    const sendResponse = vi.fn();
+    messageListener()(
+      { type: "matchThreads", keywords: ["a", 5, null, "", "b"] },
+      {},
+      sendResponse,
+    );
+    await settle();
+    expect(matchThread.mock.calls.map((c) => c[0])).toEqual(["a", "b"]);
+    expect(sendResponse).toHaveBeenCalledWith({
+      matches: { a: null, b: null },
+    });
+  });
+
+  it.each([[0], [-1], [2 ** 53]])(
+    "declines an articlePreview message whose id is %s",
+    (id) => {
+      fetchArticlePreview.mockClear();
+      const sendResponse = vi.fn();
+      expect(
+        messageListener()({ type: "articlePreview", id }, {}, sendResponse),
+      ).toBe(false);
+      expect(fetchArticlePreview).not.toHaveBeenCalled();
+    },
+  );
+});

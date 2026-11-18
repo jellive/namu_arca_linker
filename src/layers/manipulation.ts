@@ -45,7 +45,16 @@ export async function refreshThreadMatches(keywords: string[]): Promise<void> {
       keywords,
     })) as MatchThreadsResponse | undefined;
     const matches = res?.matches ?? {};
-    for (const kw of keywords) next.set(kw, matches[kw] ?? null);
+    // Own keys only: the reply is plain JSON, so a keyword such as
+    // "constructor" would otherwise read an Object.prototype member.
+    for (const kw of keywords) {
+      next.set(
+        kw,
+        Object.prototype.hasOwnProperty.call(matches, kw)
+          ? (matches[kw] ?? null)
+          : null,
+      );
+    }
   } catch (e) {
     console.warn(`${LOG_PREFIX} refreshThreadMatches 실패 — 검색 폴백`, e);
     for (const kw of keywords) next.set(kw, null);
