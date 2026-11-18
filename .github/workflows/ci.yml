@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Read-only by default; the auto-merge job raises its own scope below.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -21,6 +25,9 @@ jobs:
           egress-policy: audit
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # npm ci runs dependency install scripts; keep the token out of .git/config.
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v6
@@ -47,7 +54,8 @@ jobs:
     name: Dependabot auto-merge (patch/minor)
     needs: [verify]
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]' && github.event_name == 'pull_request'
+    # Both the event's actor and the PR's author must be Dependabot.
+    if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' && github.event.pull_request.user.login == 'dependabot[bot]'
     permissions:
       contents: write
       pull-requests: write
@@ -60,6 +68,9 @@ jobs:
       # needs:[verify] gates this on CI passing; only patch/minor auto-merge.
       - name: Merge patch/minor updates
         if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
-        run: gh pr merge --squash "${{ github.event.pull_request.html_url }}"
+        # --match-head-commit: merge only the head commit that `verify` tested.
+        run: gh pr merge --squash --match-head-commit "$HEAD_SHA" "$PR_URL"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}

@@ -45,7 +45,16 @@ export async function refreshThreadMatches(keywords: string[]): Promise<void> {
       keywords,
     })) as MatchThreadsResponse | undefined;
     const matches = res?.matches ?? {};
-    for (const kw of keywords) next.set(kw, matches[kw] ?? null);
+    // Own keys only: the reply is plain JSON, so a keyword such as
+    // "constructor" would otherwise read an Object.prototype member.
+    for (const kw of keywords) {
+      next.set(
+        kw,
+        Object.prototype.hasOwnProperty.call(matches, kw)
+          ? (matches[kw] ?? null)
+          : null,
+      );
+    }
   } catch (e) {
     console.warn(`${LOG_PREFIX} refreshThreadMatches 실패 — 검색 폴백`, e);
     for (const kw of keywords) next.set(kw, null);
@@ -64,11 +73,22 @@ function sanitizeUrl(url: string): string {
   }
 }
 
+/**
+ * Replace lone UTF-16 surrogates with U+FFFD. Page text can carry them, and
+ * encodeURIComponent throws on one — which used to abort the badge loop.
+ */
+function toWellFormed(s: string): string {
+  return s.replace(
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
+    "\uFFFD",
+  );
+}
+
 /** Build a search URL from a template, substituting + encoding {keyword}. */
 export function buildSearchUrl(template: string, keyword: string): string {
   if (!template.includes("{keyword}")) return "";
   return sanitizeUrl(
-    template.replace("{keyword}", encodeURIComponent(keyword)),
+    template.replace("{keyword}", encodeURIComponent(toWellFormed(keyword))),
   );
 }
 

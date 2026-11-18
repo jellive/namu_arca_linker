@@ -22,7 +22,7 @@
 | 권한 | 쓰는 곳 |
 |---|---|
 | `storage` | 켜기/끄기 값과 아카라이브 조회용 임의 기기 토큰을 브라우저 안에 저장 |
-| `declarativeNetRequest` | 아카라이브 실검챈 목록·글 조회 요청에만 필요한 헤더를 설정 |
+| `declarativeNetRequest` | 아카라이브 실검챈 목록·글 조회 API 주소로 가는 요청의 User-Agent 헤더를 설정 |
 | `https://namu.wiki/*` | 실시간 검색어 목록을 읽고 배지를 붙임 |
 | `https://arca.live/*` | 실검챈 글 목록과, 미리보기를 연 글의 본문을 조회 |
 

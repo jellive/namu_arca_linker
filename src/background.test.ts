@@ -3,7 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const fetchNamuhotnowArticles = vi.fn();
 const matchThread = vi.fn();
 const fetchArticlePreview = vi.fn();
-vi.mock("./lib/arca-api", () => ({
+// Network-facing functions are mocked; pure helpers such as isArticleId keep
+// their real implementation so the validation rule lives in one place.
+vi.mock("./lib/arca-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./lib/arca-api")>()),
   fetchArticlePreview: (...a: unknown[]) => fetchArticlePreview(...a),
   fetchNamuhotnowArticles: (...a: unknown[]) => fetchNamuhotnowArticles(...a),
   matchThread: (...a: unknown[]) => matchThread(...a),
@@ -18,6 +21,7 @@ const {
   onInstalledAdd,
   onStartupAdd,
   updateSessionRules,
+  storageGet,
   importLogs,
   restoreLog,
 } = vi.hoisted(() => {
@@ -25,6 +29,7 @@ const {
   const onInstalledAdd = vi.fn();
   const onStartupAdd = vi.fn();
   const updateSessionRules = vi.fn();
+  const storageGet = vi.fn();
   const importLogs: string[] = [];
   const originalLog = console.log;
   console.log = (...args: unknown[]) => {
@@ -42,12 +47,14 @@ const {
     declarativeNetRequest: {
       updateSessionRules,
     },
+    storage: { local: { get: storageGet } },
   } as unknown as typeof chrome;
   return {
     addListener,
     onInstalledAdd,
     onStartupAdd,
     updateSessionRules,
+    storageGet,
     importLogs,
     restoreLog,
   };
@@ -77,6 +84,10 @@ beforeEach(() => {
   fetchNamuhotnowArticles.mockReset();
   matchThread.mockReset();
   updateSessionRules.mockReset();
+  storageGet.mockReset();
+  storageGet.mockImplementation((_d: unknown, cb: (v: unknown) => void) =>
+    cb({ enabled: true }),
+  );
 });
 
 describe("handleMatchThreads", () => {
@@ -150,8 +161,8 @@ describe("onMessage listener", () => {
     );
 
     expect(keepAlive).toBe(true);
-    expect(fetchArticlePreview).toHaveBeenCalledWith(555);
     await settle();
+    expect(fetchArticlePreview).toHaveBeenCalledWith(555);
     expect(sendResponse).toHaveBeenCalledWith({
       text: "해명 방송을 진행했다.",
     });
@@ -308,5 +319,140 @@ describe("declarativeNetRequest User-Agent rule", () => {
     };
     expect(arg.addRules[0]!.action.requestHeaders[0]!.value).toBe(ARCA_UA);
     expect(arg.addRules[0]!.condition.urlFilter).toContain("namuhotnow");
+  });
+});
+
+describe("message contract", () => {
+  it("keeps a `__proto__` keyword as its own result", async () => {
+    fetchNamuhotnowArticles.mockResolvedValue([
+      { id: 1, title: "__proto__", createdAt: "c" },
+    ]);
+    matchThread.mockImplementation((kw: string) =>
+      kw === "__proto__" ? { id: 1, title: "__proto__" } : null,
+    );
+    const res = await handleMatchThreads(["__proto__"]);
+    expect(Object.prototype.hasOwnProperty.call(res.matches, "__proto__")).toBe(
+      true,
+    );
+    expect(res.matches["__proto__"]).toEqual({ id: 1, title: "__proto__" });
+  });
+
+  it("does not fetch the list for an empty keyword batch", async () => {
+    const res = await handleMatchThreads([]);
+    expect(fetchNamuhotnowArticles).not.toHaveBeenCalled();
+    expect(Object.keys(res.matches)).toEqual([]);
+  });
+
+  it("drops non-string and empty keywords instead of letting them fail the batch", async () => {
+    fetchNamuhotnowArticles.mockResolvedValue([]);
+    matchThread.mockReturnValue(null);
+    const sendResponse = vi.fn();
+    messageListener()(
+      { type: "matchThreads", keywords: ["a", 5, null, "", "b"] },
+      {},
+      sendResponse,
+    );
+    await settle();
+    expect(matchThread.mock.calls.map((c) => c[0])).toEqual(["a", "b"]);
+    expect(sendResponse).toHaveBeenCalledWith({
+      matches: { a: null, b: null },
+    });
+  });
+
+  it.each([[0], [-1], [2 ** 53]])(
+    "declines an articlePreview message whose id is %s",
+    (id) => {
+      fetchArticlePreview.mockClear();
+      const sendResponse = vi.fn();
+      expect(
+        messageListener()({ type: "articlePreview", id }, {}, sendResponse),
+      ).toBe(false);
+      expect(fetchArticlePreview).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe("popup OFF", () => {
+  function off() {
+    storageGet.mockImplementation((_d: unknown, cb: (v: unknown) => void) =>
+      cb({ enabled: false }),
+    );
+  }
+
+  it("answers matchThreads with no matches and no lookup while OFF", async () => {
+    off();
+    const sendResponse = vi.fn();
+    expect(
+      messageListener()(
+        { type: "matchThreads", keywords: ["a"] },
+        {},
+        sendResponse,
+      ),
+    ).toBe(true);
+    await settle();
+    expect(fetchNamuhotnowArticles).not.toHaveBeenCalled();
+    expect(sendResponse).toHaveBeenCalledWith({ matches: {} });
+  });
+
+  it("answers articlePreview with null and no lookup while OFF", async () => {
+    off();
+    fetchArticlePreview.mockClear();
+    const sendResponse = vi.fn();
+    expect(
+      messageListener()({ type: "articlePreview", id: 5 }, {}, sendResponse),
+    ).toBe(true);
+    await settle();
+    expect(fetchArticlePreview).not.toHaveBeenCalled();
+    expect(sendResponse).toHaveBeenCalledWith({ text: null });
+  });
+
+  it("treats an unreadable setting as OFF: when unsure, no lookup", async () => {
+    storageGet.mockImplementation((_d: unknown, cb: (v: unknown) => void) =>
+      cb(undefined),
+    );
+    fetchArticlePreview.mockClear();
+    const sendResponse = vi.fn();
+    messageListener()({ type: "articlePreview", id: 5 }, {}, sendResponse);
+    await settle();
+    expect(fetchArticlePreview).not.toHaveBeenCalled();
+    expect(sendResponse).toHaveBeenCalledWith({ text: null });
+  });
+});
+
+describe("incognito senders", () => {
+  const incognitoTab = { tab: { incognito: true } };
+
+  it("asks for an uncached list for an incognito tab", async () => {
+    fetchNamuhotnowArticles.mockResolvedValue([]);
+    matchThread.mockReturnValue(null);
+    messageListener()(
+      { type: "matchThreads", keywords: ["a"] },
+      incognitoTab,
+      vi.fn(),
+    );
+    await settle();
+    expect(fetchNamuhotnowArticles).toHaveBeenCalledWith(undefined, {
+      bypassCache: true,
+    });
+  });
+
+  it("asks for an uncached preview for an incognito tab", async () => {
+    fetchArticlePreview.mockClear();
+    fetchArticlePreview.mockResolvedValue("t");
+    messageListener()({ type: "articlePreview", id: 5 }, incognitoTab, vi.fn());
+    await settle();
+    expect(fetchArticlePreview).toHaveBeenCalledWith(5, { bypassCache: true });
+  });
+
+  it("keeps the shared caches for a regular tab", async () => {
+    fetchArticlePreview.mockClear();
+    fetchArticlePreview.mockResolvedValue("t");
+    messageListener()(
+      { type: "articlePreview", id: 5 },
+      { tab: { incognito: false } },
+      vi.fn(),
+    );
+    await settle();
+    expect(fetchArticlePreview).toHaveBeenCalledWith(5);
   });
 });

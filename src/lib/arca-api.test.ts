@@ -413,7 +413,7 @@ describe("fetchArticlePreview", () => {
     expect(await fetchArticlePreview(555)).toBe("해명 방송을 진행했다.");
     expect(fetchMock).toHaveBeenCalledWith(
       "https://arca.live/api/app/view/article/namuhotnow/555",
-      { headers: { "x-device-token": "t".repeat(64) } },
+      { headers: { "x-device-token": "t".repeat(64) }, credentials: "omit" },
     );
   });
 
@@ -467,5 +467,299 @@ describe("fetchArticlePreview", () => {
     expect(await fetchArticlePreview(3)).toBeNull();
     expect(warn.mock.calls[0]![0]).toContain("arca 글 미리보기 실패");
     warn.mockRestore();
+  });
+});
+
+describe("fetchNamuhotnowArticles — untrusted rows", () => {
+  beforeEach(() => {
+    _resetArcaCache();
+    localGet.mockImplementation((_d, cb) =>
+      cb({ arcaDeviceToken: "t".repeat(64) }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubPages(...pages: unknown[]) {
+    const fetchMock = vi.fn();
+    for (const body of pages) {
+      fetchMock.mockResolvedValueOnce({ ok: true, json: async () => body });
+    }
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ articles: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("drops rows whose id is not a positive safe integer or whose title is not a string", async () => {
+    stubPages({
+      articles: [
+        { id: 1, title: "ok", createdAt: "c1" },
+        { id: "../x", title: "path", createdAt: "c2" },
+        { id: 0, title: "zero", createdAt: "c3" },
+        { id: -5, title: "neg", createdAt: "c4" },
+        { id: 2 ** 53, title: "big", createdAt: "c5" },
+        { id: 1.5, title: "frac", createdAt: "c6" },
+        { id: 7, title: 42, createdAt: "c7" },
+        null,
+        { id: 8, title: "ok2", createdAt: "c8" },
+      ],
+    });
+    const arts = await fetchNamuhotnowArticles();
+    expect(arts.map((a) => a.id)).toEqual([1, 8]);
+  });
+
+  it("keeps the page-2 cursor on the raw last row even when that row is dropped", async () => {
+    const fetchMock = stubPages(
+      {
+        articles: [
+          { id: 1, title: "a", createdAt: "c1" },
+          { id: "bad", title: "b", createdAt: "c2" },
+        ],
+      },
+      { articles: [{ id: 3, title: "c", createdAt: "c3" }] },
+    );
+    const arts = await fetchNamuhotnowArticles();
+    expect(String(fetchMock.mock.calls[1]![0])).toContain("before=c2");
+    expect(arts.map((a) => a.id)).toEqual([1, 3]);
+  });
+
+  it("treats a non-array `articles` as an empty page", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchMock = stubPages({
+      articles: { length: 1, 0: { id: 1, title: "a" } },
+    });
+    expect(await fetchNamuhotnowArticles()).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // no page 2 off a fake array
+    expect(warn).not.toHaveBeenCalled(); // handled, not crashed into the catch
+    warn.mockRestore();
+  });
+
+  it("skips page 2 but keeps page 1 when the last row is not a usable cursor", async () => {
+    const fetchMock = stubPages({
+      articles: [{ id: 1, title: "a", createdAt: "c1" }, null],
+    });
+    const arts = await fetchNamuhotnowArticles();
+    expect(arts.map((a) => a.id)).toEqual([1]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("incognito callers bypass the shared caches", () => {
+  beforeEach(() => {
+    _resetArcaCache();
+    _resetPreviewCache();
+    localGet.mockImplementation((_d, cb) =>
+      cb({ arcaDeviceToken: "t".repeat(64) }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubList() {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ articles: [{ id: 1, title: "a" }] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("does not read the list cache, and asks the browser not to store the answer", async () => {
+    const fetchMock = stubList();
+    await fetchNamuhotnowArticles(); // regular caller fills the cache
+    await fetchNamuhotnowArticles(50, { bypassCache: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]![1]).toMatchObject({ cache: "no-store" });
+    await fetchNamuhotnowArticles(); // regular cache still from the first call
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not seed the list cache for regular callers", async () => {
+    const fetchMock = stubList();
+    await fetchNamuhotnowArticles(50, { bypassCache: true });
+    await fetchNamuhotnowArticles();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("neither reads nor fills the shared preview cache", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ content: "본문" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchArticlePreview(7); // regular caller fills the cache
+    await fetchArticlePreview(7, { bypassCache: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]![1]).toMatchObject({ cache: "no-store" });
+    await fetchArticlePreview(8, { bypassCache: true });
+    await fetchArticlePreview(8); // incognito did not seed it
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe("arca requests carry no cookies", () => {
+  beforeEach(() => {
+    _resetArcaCache();
+    _resetPreviewCache();
+    localGet.mockImplementation((_d, cb) =>
+      cb({ arcaDeviceToken: "t".repeat(64) }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("omits credentials on list and preview requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ articles: [], content: "" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchNamuhotnowArticles();
+    await fetchArticlePreview(3);
+    expect(fetchMock.mock.calls[0]![1]).toMatchObject({ credentials: "omit" });
+    expect(fetchMock.mock.calls[1]![1]).toMatchObject({ credentials: "omit" });
+  });
+});
+
+describe("fetchNamuhotnowArticles — paging contract", () => {
+  beforeEach(() => {
+    _resetArcaCache();
+    localGet.mockImplementation((_d, cb) =>
+      cb({ arcaDeviceToken: "t".repeat(64) }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubPages(...pages: unknown[]) {
+    const fetchMock = vi.fn();
+    for (const body of pages) {
+      fetchMock.mockResolvedValueOnce({ ok: true, json: async () => body });
+    }
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ articles: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("pages on a numeric createdAt cursor", async () => {
+    const fetchMock = stubPages(
+      { articles: [{ id: 1, title: "a", createdAt: 1700000000 }] },
+      { articles: [{ id: 2, title: "b", createdAt: 1699999999 }] },
+    );
+    const arts = await fetchNamuhotnowArticles();
+    expect(String(fetchMock.mock.calls[1]![0])).toContain("before=1700000000");
+    expect(arts.map((a) => a.id)).toEqual([1, 2]);
+  });
+
+  it("does not re-request page 1 when the cursor is an empty string", async () => {
+    const fetchMock = stubPages({
+      articles: [{ id: 1, title: "a", createdAt: "" }],
+    });
+    await fetchNamuhotnowArticles();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops unusable page-2 rows too", async () => {
+    stubPages(
+      { articles: [{ id: 1, title: "a", createdAt: "c1" }] },
+      {
+        articles: [
+          { id: "x", title: "b", createdAt: "c2" },
+          { id: 3, title: 5, createdAt: "c3" },
+          { id: 4, title: "d", createdAt: "c4" },
+        ],
+      },
+    );
+    const arts = await fetchNamuhotnowArticles();
+    expect(arts.map((a) => a.id)).toEqual([1, 4]);
+  });
+
+  it("does not let an unusable page-1 row hide a valid page-2 row with the same id", async () => {
+    stubPages(
+      {
+        articles: [
+          { id: 1, title: "a", createdAt: "c1" },
+          { id: 2, title: 99, createdAt: "c2" },
+        ],
+      },
+      { articles: [{ id: 2, title: "둘째", createdAt: "c3" }] },
+    );
+    const arts = await fetchNamuhotnowArticles();
+    expect(arts.map((a) => [a.id, a.title])).toEqual([
+      [1, "a"],
+      [2, "둘째"],
+    ]);
+  });
+});
+
+describe("matchThread — optional fields", () => {
+  it("keeps only well-typed optional fields on a match", () => {
+    const weird = Object.create(null) as unknown as string; // String(weird) throws
+    const m = matchThread("a", [
+      {
+        id: 1,
+        title: "a",
+        createdAt: 5 as unknown as string,
+        commentCount: "9" as unknown as number,
+        categoryDisplayName: weird,
+      },
+    ]);
+    expect(m).toEqual({
+      id: 1,
+      title: "a",
+      commentCount: undefined,
+      category: undefined,
+      createdAt: undefined,
+    });
+  });
+});
+
+describe("incognito callers — guards", () => {
+  beforeEach(() => {
+    _resetArcaCache();
+    localGet.mockImplementation((_d, cb) =>
+      cb({ arcaDeviceToken: "t".repeat(64) }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("does not overwrite the regular list cache", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ articles: [{ id: 1, title: "regular" }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ articles: [{ id: 2, title: "incognito" }] }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchNamuhotnowArticles();
+    await fetchNamuhotnowArticles(50, { bypassCache: true });
+    const again = await fetchNamuhotnowArticles();
+    expect(again.map((a) => a.title)).toEqual(["regular"]);
+  });
+
+  it("asks the browser not to store page 2 either", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          articles: [{ id: 1, title: "a", createdAt: "c1" }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ articles: [] }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchNamuhotnowArticles(50, { bypassCache: true });
+    expect(fetchMock.mock.calls[1]![1]).toMatchObject({ cache: "no-store" });
   });
 });

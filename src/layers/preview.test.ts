@@ -454,3 +454,17 @@ describe("hidePreview", () => {
     expect(() => hidePreview()).not.toThrow();
   });
 });
+
+describe("detached badge", () => {
+  it("ignores show events on a badge that was removed from the page", async () => {
+    sendMessage.mockResolvedValue({ text: "x" });
+    const a = link();
+    attachPreview(a, MATCH);
+    a.remove(); // what removeArcaLinks does on popup OFF
+    a.dispatchEvent(new MouseEvent("mouseenter"));
+    a.dispatchEvent(new FocusEvent("focus"));
+    await flush();
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(document.getElementById(PREVIEW_ID)).toBeNull();
+  });
+});

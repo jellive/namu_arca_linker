@@ -118,6 +118,9 @@ async function loadBody(anchor: HTMLElement, id: number): Promise<void> {
 }
 
 function showPreview(anchor: HTMLElement, match: ThreadMatch): void {
+  // A badge stripped on popup OFF keeps its listeners; page script may still
+  // hold it and fire events. A detached badge shows and fetches nothing.
+  if (!anchor.isConnected) return;
   ensureTip();
   currentAnchor = anchor;
   part("meta").textContent = [
