@@ -95,8 +95,25 @@ async function fetchPage(
     headers: { "x-device-token": token },
   });
   if (!res.ok) throw new Error(`arca API ${res.status}`);
-  const data = (await res.json()) as { articles?: ArcaArticle[] };
-  return data.articles ?? [];
+  const data = (await res.json()) as { articles?: unknown } | null;
+  // Third-party JSON: anything but an array is an empty page. Rows are still
+  // untrusted here — fetchNamuhotnowArticles filters them after paging.
+  return Array.isArray(data?.articles) ? (data.articles as ArcaArticle[]) : [];
+}
+
+/**
+ * A list row the extension can build a link and a preview request from:
+ * a positive safe-integer id (it becomes a URL path segment) and a string title.
+ */
+function isUsableArticle(a: unknown): a is ArcaArticle {
+  if (typeof a !== "object" || a === null) return false;
+  const { id, title } = a as { id?: unknown; title?: unknown };
+  return (
+    typeof id === "number" &&
+    Number.isSafeInteger(id) &&
+    id > 0 &&
+    typeof title === "string"
+  );
 }
 
 /**
@@ -113,14 +130,17 @@ export async function fetchNamuhotnowArticles(
     const token = await getDeviceToken();
     const page1 = await fetchPage(token, undefined, limit);
     let merged = page1;
-    const last = page1[page1.length - 1];
-    if (last) {
+    // The page-2 cursor is the raw last row's createdAt, even if that row is
+    // later dropped as unusable — filtering first would shift the cursor.
+    const last = page1[page1.length - 1] as Partial<ArcaArticle> | null;
+    if (last && typeof last.createdAt === "string") {
       const page2 = await fetchPage(token, last.createdAt, limit);
-      const seen = new Set(page1.map((a) => a.id));
-      merged = page1.concat(page2.filter((a) => !seen.has(a.id)));
+      const seen = new Set(page1.map((a) => a?.id));
+      merged = page1.concat(page2.filter((a) => !seen.has(a?.id)));
     }
-    _cache = { articles: merged, fetchedAt: Date.now() };
-    return merged;
+    const articles = merged.filter(isUsableArticle);
+    _cache = { articles, fetchedAt: Date.now() };
+    return articles;
   } catch (e) {
     console.warn(`${LOG_PREFIX} arca API fetch 실패 — 검색 폴백`, e);
     return [];

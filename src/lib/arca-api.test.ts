@@ -469,3 +469,79 @@ describe("fetchArticlePreview", () => {
     warn.mockRestore();
   });
 });
+
+describe("fetchNamuhotnowArticles — untrusted rows", () => {
+  beforeEach(() => {
+    _resetArcaCache();
+    localGet.mockImplementation((_d, cb) =>
+      cb({ arcaDeviceToken: "t".repeat(64) }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubPages(...pages: unknown[]) {
+    const fetchMock = vi.fn();
+    for (const body of pages) {
+      fetchMock.mockResolvedValueOnce({ ok: true, json: async () => body });
+    }
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ articles: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("drops rows whose id is not a positive safe integer or whose title is not a string", async () => {
+    stubPages({
+      articles: [
+        { id: 1, title: "ok", createdAt: "c1" },
+        { id: "../x", title: "path", createdAt: "c2" },
+        { id: 0, title: "zero", createdAt: "c3" },
+        { id: -5, title: "neg", createdAt: "c4" },
+        { id: 2 ** 53, title: "big", createdAt: "c5" },
+        { id: 1.5, title: "frac", createdAt: "c6" },
+        { id: 7, title: 42, createdAt: "c7" },
+        null,
+        { id: 8, title: "ok2", createdAt: "c8" },
+      ],
+    });
+    const arts = await fetchNamuhotnowArticles();
+    expect(arts.map((a) => a.id)).toEqual([1, 8]);
+  });
+
+  it("keeps the page-2 cursor on the raw last row even when that row is dropped", async () => {
+    const fetchMock = stubPages(
+      {
+        articles: [
+          { id: 1, title: "a", createdAt: "c1" },
+          { id: "bad", title: "b", createdAt: "c2" },
+        ],
+      },
+      { articles: [{ id: 3, title: "c", createdAt: "c3" }] },
+    );
+    const arts = await fetchNamuhotnowArticles();
+    expect(String(fetchMock.mock.calls[1]![0])).toContain("before=c2");
+    expect(arts.map((a) => a.id)).toEqual([1, 3]);
+  });
+
+  it("treats a non-array `articles` as an empty page", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchMock = stubPages({
+      articles: { length: 1, 0: { id: 1, title: "a" } },
+    });
+    expect(await fetchNamuhotnowArticles()).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // no page 2 off a fake array
+    expect(warn).not.toHaveBeenCalled(); // handled, not crashed into the catch
+    warn.mockRestore();
+  });
+
+  it("skips page 2 but keeps page 1 when the last row is not a usable cursor", async () => {
+    const fetchMock = stubPages({
+      articles: [{ id: 1, title: "a", createdAt: "c1" }, null],
+    });
+    const arts = await fetchNamuhotnowArticles();
+    expect(arts.map((a) => a.id)).toEqual([1]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
