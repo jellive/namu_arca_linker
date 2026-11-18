@@ -107,6 +107,7 @@ async function fetchPage(
   if (before) url += `&before=${encodeURIComponent(before)}&offset=1`;
   const res = await fetch(url, {
     headers: { "x-device-token": token },
+    credentials: "omit",
     ...cacheInit(bypass),
   });
   if (!res.ok) throw new Error(`arca API ${res.status}`);
@@ -237,6 +238,8 @@ export async function fetchArticlePreview(
     const token = await getDeviceToken();
     const res = await fetch(`${ARCA_VIEW_BASE}/${id}`, {
       headers: { "x-device-token": token },
+      // No arca.live cookies: the only identifier sent is the device token.
+      credentials: "omit",
       ...cacheInit(bypass),
     });
     if (!res.ok) throw new Error(`arca API ${res.status}`);

@@ -413,7 +413,7 @@ describe("fetchArticlePreview", () => {
     expect(await fetchArticlePreview(555)).toBe("해명 방송을 진행했다.");
     expect(fetchMock).toHaveBeenCalledWith(
       "https://arca.live/api/app/view/article/namuhotnow/555",
-      { headers: { "x-device-token": "t".repeat(64) } },
+      { headers: { "x-device-token": "t".repeat(64) }, credentials: "omit" },
     );
   });
 
@@ -596,5 +596,29 @@ describe("incognito callers bypass the shared caches", () => {
     await fetchArticlePreview(8, { bypassCache: true });
     await fetchArticlePreview(8); // incognito did not seed it
     expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe("arca requests carry no cookies", () => {
+  beforeEach(() => {
+    _resetArcaCache();
+    _resetPreviewCache();
+    localGet.mockImplementation((_d, cb) =>
+      cb({ arcaDeviceToken: "t".repeat(64) }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("omits credentials on list and preview requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ articles: [], content: "" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchNamuhotnowArticles();
+    await fetchArticlePreview(3);
+    expect(fetchMock.mock.calls[0]![1]).toMatchObject({ credentials: "omit" });
+    expect(fetchMock.mock.calls[1]![1]).toMatchObject({ credentials: "omit" });
   });
 });
