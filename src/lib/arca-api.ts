@@ -40,12 +40,20 @@ function stripHighlight(title: string): string {
 }
 
 function toMatch(a: ArcaArticle): ThreadMatch {
+  // Optional fields come from third-party JSON and end up in badge text and the
+  // preview; keep each only when it has the expected type.
   return {
     id: a.id,
     title: stripHighlight(a.title),
-    commentCount: a.commentCount,
-    category: a.categoryDisplayName,
-    createdAt: a.createdAt,
+    commentCount:
+      typeof a.commentCount === "number" && Number.isFinite(a.commentCount)
+        ? a.commentCount
+        : undefined,
+    category:
+      typeof a.categoryDisplayName === "string"
+        ? a.categoryDisplayName
+        : undefined,
+    createdAt: typeof a.createdAt === "string" ? a.createdAt : undefined,
   };
 }
 
@@ -117,19 +125,28 @@ async function fetchPage(
   return Array.isArray(data?.articles) ? (data.articles as ArcaArticle[]) : [];
 }
 
+/** Article ids become a URL path segment: positive safe integers only. */
+export function isArticleId(id: unknown): id is number {
+  return typeof id === "number" && Number.isSafeInteger(id) && id > 0;
+}
+
 /**
  * A list row the extension can build a link and a preview request from:
- * a positive safe-integer id (it becomes a URL path segment) and a string title.
+ * a valid article id and a string title.
  */
 function isUsableArticle(a: unknown): a is ArcaArticle {
   if (typeof a !== "object" || a === null) return false;
   const { id, title } = a as { id?: unknown; title?: unknown };
-  return (
-    typeof id === "number" &&
-    Number.isSafeInteger(id) &&
-    id > 0 &&
-    typeof title === "string"
-  );
+  return isArticleId(id) && typeof title === "string";
+}
+
+/** Page-2 cursor from a raw row: a non-empty string or a finite number. */
+function pageCursor(row: unknown): string | null {
+  if (typeof row !== "object" || row === null) return null;
+  const c = (row as { createdAt?: unknown }).createdAt;
+  if (typeof c === "string" && c !== "") return c;
+  if (typeof c === "number" && Number.isFinite(c)) return String(c);
+  return null;
 }
 
 /**
@@ -147,16 +164,19 @@ export async function fetchNamuhotnowArticles(
   try {
     const token = await getDeviceToken();
     const page1 = await fetchPage(token, undefined, limit, bypass);
-    let merged = page1;
+    let articles = page1.filter(isUsableArticle);
     // The page-2 cursor is the raw last row's createdAt, even if that row is
-    // later dropped as unusable — filtering first would shift the cursor.
-    const last = page1[page1.length - 1] as Partial<ArcaArticle> | null;
-    if (last && typeof last.createdAt === "string") {
-      const page2 = await fetchPage(token, last.createdAt, limit, bypass);
-      const seen = new Set(page1.map((a) => a?.id));
-      merged = page1.concat(page2.filter((a) => !seen.has(a?.id)));
+    // dropped as unusable — filtering first would shift the cursor. Each page
+    // is filtered before de-duplication, so a bad page-1 row cannot hide a
+    // good page-2 row with the same id.
+    const cursor = pageCursor(page1[page1.length - 1]);
+    if (cursor !== null) {
+      const page2 = (await fetchPage(token, cursor, limit, bypass)).filter(
+        isUsableArticle,
+      );
+      const seen = new Set(articles.map((a) => a.id));
+      articles = articles.concat(page2.filter((a) => !seen.has(a.id)));
     }
-    const articles = merged.filter(isUsableArticle);
     if (!bypass) _cache = { articles, fetchedAt: Date.now() };
     return articles;
   } catch (e) {

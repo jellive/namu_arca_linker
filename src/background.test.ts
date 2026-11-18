@@ -3,7 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const fetchNamuhotnowArticles = vi.fn();
 const matchThread = vi.fn();
 const fetchArticlePreview = vi.fn();
-vi.mock("./lib/arca-api", () => ({
+// Network-facing functions are mocked; pure helpers such as isArticleId keep
+// their real implementation so the validation rule lives in one place.
+vi.mock("./lib/arca-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./lib/arca-api")>()),
   fetchArticlePreview: (...a: unknown[]) => fetchArticlePreview(...a),
   fetchNamuhotnowArticles: (...a: unknown[]) => fetchNamuhotnowArticles(...a),
   matchThread: (...a: unknown[]) => matchThread(...a),
@@ -403,17 +406,16 @@ describe("popup OFF", () => {
     expect(sendResponse).toHaveBeenCalledWith({ text: null });
   });
 
-  it("treats an unreadable setting as ON, today's behavior", async () => {
+  it("treats an unreadable setting as OFF: when unsure, no lookup", async () => {
     storageGet.mockImplementation((_d: unknown, cb: (v: unknown) => void) =>
       cb(undefined),
     );
     fetchArticlePreview.mockClear();
-    fetchArticlePreview.mockResolvedValue("t");
     const sendResponse = vi.fn();
     messageListener()({ type: "articlePreview", id: 5 }, {}, sendResponse);
     await settle();
-    expect(fetchArticlePreview).toHaveBeenCalledWith(5);
-    expect(sendResponse).toHaveBeenCalledWith({ text: "t" });
+    expect(fetchArticlePreview).not.toHaveBeenCalled();
+    expect(sendResponse).toHaveBeenCalledWith({ text: null });
   });
 });
 

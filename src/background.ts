@@ -2,6 +2,7 @@ import { LOG_PREFIX } from "./constants/config";
 import {
   fetchArticlePreview,
   fetchNamuhotnowArticles,
+  isArticleId,
   matchThread,
   type FetchOptions,
   type ThreadMatch,
@@ -27,11 +28,6 @@ export async function handleMatchThreads(
     matches[kw] = matchThread(kw, articles);
   }
   return { matches };
-}
-
-/** Article ids become a URL path segment: positive safe integers only. */
-function isArticleId(id: unknown): id is number {
-  return typeof id === "number" && Number.isSafeInteger(id) && id > 0;
 }
 
 // arca app API gates on the official-app User-Agent. fetch() cannot set
@@ -72,13 +68,14 @@ chrome.runtime.onStartup.addListener(registerArcaUaRule);
 /**
  * The popup's ON/OFF flag (default ON). Read here so that OFF stops arca.live
  * lookups even when a stale content-script listener still asks — CHANGELOG
- * promises no lookups while OFF. An unreadable setting keeps today's behavior.
+ * promises no lookups while OFF. If the setting cannot be read, no lookup:
+ * when unsure, keep the promise.
  */
 function isEnabled(): Promise<boolean> {
   return new Promise((resolve) => {
     chrome.storage.local.get({ enabled: true }, (local) => {
       if (chrome.runtime.lastError || !local) {
-        resolve(true);
+        resolve(false);
         return;
       }
       resolve(Boolean(local["enabled"]));

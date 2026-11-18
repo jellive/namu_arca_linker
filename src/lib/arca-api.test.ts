@@ -622,3 +622,144 @@ describe("arca requests carry no cookies", () => {
     expect(fetchMock.mock.calls[1]![1]).toMatchObject({ credentials: "omit" });
   });
 });
+
+describe("fetchNamuhotnowArticles — paging contract", () => {
+  beforeEach(() => {
+    _resetArcaCache();
+    localGet.mockImplementation((_d, cb) =>
+      cb({ arcaDeviceToken: "t".repeat(64) }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubPages(...pages: unknown[]) {
+    const fetchMock = vi.fn();
+    for (const body of pages) {
+      fetchMock.mockResolvedValueOnce({ ok: true, json: async () => body });
+    }
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ articles: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("pages on a numeric createdAt cursor", async () => {
+    const fetchMock = stubPages(
+      { articles: [{ id: 1, title: "a", createdAt: 1700000000 }] },
+      { articles: [{ id: 2, title: "b", createdAt: 1699999999 }] },
+    );
+    const arts = await fetchNamuhotnowArticles();
+    expect(String(fetchMock.mock.calls[1]![0])).toContain("before=1700000000");
+    expect(arts.map((a) => a.id)).toEqual([1, 2]);
+  });
+
+  it("does not re-request page 1 when the cursor is an empty string", async () => {
+    const fetchMock = stubPages({
+      articles: [{ id: 1, title: "a", createdAt: "" }],
+    });
+    await fetchNamuhotnowArticles();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops unusable page-2 rows too", async () => {
+    stubPages(
+      { articles: [{ id: 1, title: "a", createdAt: "c1" }] },
+      {
+        articles: [
+          { id: "x", title: "b", createdAt: "c2" },
+          { id: 3, title: 5, createdAt: "c3" },
+          { id: 4, title: "d", createdAt: "c4" },
+        ],
+      },
+    );
+    const arts = await fetchNamuhotnowArticles();
+    expect(arts.map((a) => a.id)).toEqual([1, 4]);
+  });
+
+  it("does not let an unusable page-1 row hide a valid page-2 row with the same id", async () => {
+    stubPages(
+      {
+        articles: [
+          { id: 1, title: "a", createdAt: "c1" },
+          { id: 2, title: 99, createdAt: "c2" },
+        ],
+      },
+      { articles: [{ id: 2, title: "둘째", createdAt: "c3" }] },
+    );
+    const arts = await fetchNamuhotnowArticles();
+    expect(arts.map((a) => [a.id, a.title])).toEqual([
+      [1, "a"],
+      [2, "둘째"],
+    ]);
+  });
+});
+
+describe("matchThread — optional fields", () => {
+  it("keeps only well-typed optional fields on a match", () => {
+    const weird = Object.create(null) as unknown as string; // String(weird) throws
+    const m = matchThread("a", [
+      {
+        id: 1,
+        title: "a",
+        createdAt: 5 as unknown as string,
+        commentCount: "9" as unknown as number,
+        categoryDisplayName: weird,
+      },
+    ]);
+    expect(m).toEqual({
+      id: 1,
+      title: "a",
+      commentCount: undefined,
+      category: undefined,
+      createdAt: undefined,
+    });
+  });
+});
+
+describe("incognito callers — guards", () => {
+  beforeEach(() => {
+    _resetArcaCache();
+    localGet.mockImplementation((_d, cb) =>
+      cb({ arcaDeviceToken: "t".repeat(64) }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("does not overwrite the regular list cache", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ articles: [{ id: 1, title: "regular" }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ articles: [{ id: 2, title: "incognito" }] }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchNamuhotnowArticles();
+    await fetchNamuhotnowArticles(50, { bypassCache: true });
+    const again = await fetchNamuhotnowArticles();
+    expect(again.map((a) => a.title)).toEqual(["regular"]);
+  });
+
+  it("asks the browser not to store page 2 either", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          articles: [{ id: 1, title: "a", createdAt: "c1" }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ articles: [] }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchNamuhotnowArticles(50, { bypassCache: true });
+    expect(fetchMock.mock.calls[1]![1]).toMatchObject({ cache: "no-store" });
+  });
+});
