@@ -977,3 +977,17 @@ describe("refreshThreadMatches — reply keys", () => {
     expect(threadMatches.get("__proto__")).toEqual(MATCH);
   });
 });
+
+describe("buildSearchUrl — malformed text", () => {
+  it("keeps a search link for a keyword with a lone surrogate", () => {
+    expect(
+      buildSearchUrl("https://x.test/?q={keyword}", "a\uD800b\uDC00c"),
+    ).toBe("https://x.test/?q=a%EF%BF%BDb%EF%BF%BDc");
+  });
+
+  it("leaves a well-formed surrogate pair untouched", () => {
+    expect(buildSearchUrl("https://x.test/?q={keyword}", "😀")).toBe(
+      "https://x.test/?q=%F0%9F%98%80",
+    );
+  });
+});

@@ -73,11 +73,22 @@ function sanitizeUrl(url: string): string {
   }
 }
 
+/**
+ * Replace lone UTF-16 surrogates with U+FFFD. Page text can carry them, and
+ * encodeURIComponent throws on one — which used to abort the badge loop.
+ */
+function toWellFormed(s: string): string {
+  return s.replace(
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
+    "\uFFFD",
+  );
+}
+
 /** Build a search URL from a template, substituting + encoding {keyword}. */
 export function buildSearchUrl(template: string, keyword: string): string {
   if (!template.includes("{keyword}")) return "";
   return sanitizeUrl(
-    template.replace("{keyword}", encodeURIComponent(keyword)),
+    template.replace("{keyword}", encodeURIComponent(toWellFormed(keyword))),
   );
 }
 
