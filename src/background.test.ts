@@ -416,3 +416,41 @@ describe("popup OFF", () => {
     expect(sendResponse).toHaveBeenCalledWith({ text: "t" });
   });
 });
+
+describe("incognito senders", () => {
+  const incognitoTab = { tab: { incognito: true } };
+
+  it("asks for an uncached list for an incognito tab", async () => {
+    fetchNamuhotnowArticles.mockResolvedValue([]);
+    matchThread.mockReturnValue(null);
+    messageListener()(
+      { type: "matchThreads", keywords: ["a"] },
+      incognitoTab,
+      vi.fn(),
+    );
+    await settle();
+    expect(fetchNamuhotnowArticles).toHaveBeenCalledWith(undefined, {
+      bypassCache: true,
+    });
+  });
+
+  it("asks for an uncached preview for an incognito tab", async () => {
+    fetchArticlePreview.mockClear();
+    fetchArticlePreview.mockResolvedValue("t");
+    messageListener()({ type: "articlePreview", id: 5 }, incognitoTab, vi.fn());
+    await settle();
+    expect(fetchArticlePreview).toHaveBeenCalledWith(5, { bypassCache: true });
+  });
+
+  it("keeps the shared caches for a regular tab", async () => {
+    fetchArticlePreview.mockClear();
+    fetchArticlePreview.mockResolvedValue("t");
+    messageListener()(
+      { type: "articlePreview", id: 5 },
+      { tab: { incognito: false } },
+      vi.fn(),
+    );
+    await settle();
+    expect(fetchArticlePreview).toHaveBeenCalledWith(5);
+  });
+});

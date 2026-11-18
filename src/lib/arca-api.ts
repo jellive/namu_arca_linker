@@ -81,10 +81,24 @@ export function _resetArcaCache(): void {
   _cache = null;
 }
 
+/**
+ * Options for callers whose answers must not be shared. An incognito tab's
+ * requests skip the worker's in-memory caches and the browser's HTTP cache,
+ * so another window cannot time what it caused to be cached.
+ */
+export interface FetchOptions {
+  bypassCache?: boolean;
+}
+
+function cacheInit(bypass: boolean): RequestInit {
+  return bypass ? { cache: "no-store" } : {};
+}
+
 async function fetchPage(
   token: string,
   before?: string,
   limit = 50,
+  bypass = false,
 ): Promise<ArcaArticle[]> {
   // NOTE: User-Agent is a forbidden fetch header in a service worker. If the
   // spike (Task 1) showed the API rejects browser UAs, Task 10 adds a
@@ -93,6 +107,7 @@ async function fetchPage(
   if (before) url += `&before=${encodeURIComponent(before)}&offset=1`;
   const res = await fetch(url, {
     headers: { "x-device-token": token },
+    ...cacheInit(bypass),
   });
   if (!res.ok) throw new Error(`arca API ${res.status}`);
   const data = (await res.json()) as { articles?: unknown } | null;
@@ -122,24 +137,26 @@ function isUsableArticle(a: unknown): a is ArcaArticle {
  */
 export async function fetchNamuhotnowArticles(
   limit = 50,
+  opts: FetchOptions = {},
 ): Promise<ArcaArticle[]> {
-  if (_cache && Date.now() - _cache.fetchedAt < CACHE_TTL_MS) {
+  const bypass = opts.bypassCache === true;
+  if (!bypass && _cache && Date.now() - _cache.fetchedAt < CACHE_TTL_MS) {
     return _cache.articles;
   }
   try {
     const token = await getDeviceToken();
-    const page1 = await fetchPage(token, undefined, limit);
+    const page1 = await fetchPage(token, undefined, limit, bypass);
     let merged = page1;
     // The page-2 cursor is the raw last row's createdAt, even if that row is
     // later dropped as unusable — filtering first would shift the cursor.
     const last = page1[page1.length - 1] as Partial<ArcaArticle> | null;
     if (last && typeof last.createdAt === "string") {
-      const page2 = await fetchPage(token, last.createdAt, limit);
+      const page2 = await fetchPage(token, last.createdAt, limit, bypass);
       const seen = new Set(page1.map((a) => a?.id));
       merged = page1.concat(page2.filter((a) => !seen.has(a?.id)));
     }
     const articles = merged.filter(isUsableArticle);
-    _cache = { articles, fetchedAt: Date.now() };
+    if (!bypass) _cache = { articles, fetchedAt: Date.now() };
     return articles;
   } catch (e) {
     console.warn(`${LOG_PREFIX} arca API fetch 실패 — 검색 폴백`, e);
@@ -209,13 +226,18 @@ function excerpt(text: string): string {
  * explanation lives — titles are only keyword lists). Returns null on any
  * failure; failures are not cached so the next hover retries.
  */
-export async function fetchArticlePreview(id: number): Promise<string | null> {
-  const cached = _previewCache.get(id);
+export async function fetchArticlePreview(
+  id: number,
+  opts: FetchOptions = {},
+): Promise<string | null> {
+  const bypass = opts.bypassCache === true;
+  const cached = bypass ? undefined : _previewCache.get(id);
   if (cached !== undefined) return cached;
   try {
     const token = await getDeviceToken();
     const res = await fetch(`${ARCA_VIEW_BASE}/${id}`, {
       headers: { "x-device-token": token },
+      ...cacheInit(bypass),
     });
     if (!res.ok) throw new Error(`arca API ${res.status}`);
     const data = (await res.json()) as {
@@ -225,7 +247,7 @@ export async function fetchArticlePreview(id: number): Promise<string | null> {
     const text = data.isSpoilerAlert
       ? SPOILER_NOTICE
       : excerpt(htmlToText(data.content ?? ""));
-    _previewCache.set(id, text);
+    if (!bypass) _previewCache.set(id, text);
     return text;
   } catch (e) {
     console.warn(`${LOG_PREFIX} arca 글 미리보기 실패`, e);

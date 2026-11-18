@@ -545,3 +545,56 @@ describe("fetchNamuhotnowArticles — untrusted rows", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("incognito callers bypass the shared caches", () => {
+  beforeEach(() => {
+    _resetArcaCache();
+    _resetPreviewCache();
+    localGet.mockImplementation((_d, cb) =>
+      cb({ arcaDeviceToken: "t".repeat(64) }),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubList() {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ articles: [{ id: 1, title: "a" }] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("does not read the list cache, and asks the browser not to store the answer", async () => {
+    const fetchMock = stubList();
+    await fetchNamuhotnowArticles(); // regular caller fills the cache
+    await fetchNamuhotnowArticles(50, { bypassCache: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]![1]).toMatchObject({ cache: "no-store" });
+    await fetchNamuhotnowArticles(); // regular cache still from the first call
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not seed the list cache for regular callers", async () => {
+    const fetchMock = stubList();
+    await fetchNamuhotnowArticles(50, { bypassCache: true });
+    await fetchNamuhotnowArticles();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("neither reads nor fills the shared preview cache", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ content: "본문" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchArticlePreview(7); // regular caller fills the cache
+    await fetchArticlePreview(7, { bypassCache: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]![1]).toMatchObject({ cache: "no-store" });
+    await fetchArticlePreview(8, { bypassCache: true });
+    await fetchArticlePreview(8); // incognito did not seed it
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+});
