@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.6] - 2026-11-28
+
 ### Fixed
 
 - **팝업에서 끈 동안에는 아카라이브 조회를 하지 않는다.** 배지를 걷어낸 뒤에도 미리보기 처리가 남아

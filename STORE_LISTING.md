@@ -2,8 +2,8 @@
 
 This file contains copy-paste ready content for the Chrome Web Store developer console submission.
 
-- **Package version**: 1.5.5
-- **Submittable zip**: `release/namu_arca_linker-v1.5.5.zip`
+- **Package version**: 1.5.6
+- **Submittable zip**: `release/namu_arca_linker-v1.5.6.zip`
 - **Manifest**: Manifest V3
 - **릴리즈 성격**: 업데이트 (스토어 현재 v1.5.4, item `fhmagpkcdpcnmbihkgdcmabidcmdmpgl`)
 - **요청 권한은 1.5.4 와 동일하다** — `storage`, `declarativeNetRequest` + 호스트 권한 2개.
